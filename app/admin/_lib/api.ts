@@ -301,6 +301,8 @@ export type ProductDetail = {
   brand: string;
   variants: ProductVariant[];
   images: ProductImage[];
+  /** YouTube link — Shorts, watch or youtu.be. */
+  videoUrl?: string | null;
   attributes: { gender?: string; occasions: string[]; style?: string; finish?: string; certification?: string };
   tags: string[];
   status: "DRAFT" | "ACTIVE" | "ARCHIVED";

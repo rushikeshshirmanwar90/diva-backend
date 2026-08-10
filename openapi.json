@@ -594,7 +594,6 @@
                   }
                 },
                 "required": [
-                  "email",
                   "password"
                 ],
                 "additionalProperties": false
@@ -2175,6 +2174,7 @@
                   },
                   "videoUrl": {
                     "type": "string",
+                    "nullable": true,
                     "format": "uri"
                   },
                   "pricePaise": {
@@ -2598,6 +2598,7 @@
                   },
                   "videoUrl": {
                     "type": "string",
+                    "nullable": true,
                     "format": "uri"
                   },
                   "pricePaise": {

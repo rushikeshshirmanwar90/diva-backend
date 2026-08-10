@@ -211,6 +211,9 @@ export async function list(query: ListProductsQuery, options: { publicOnly: bool
               isNewArrival: 1,
               status: 1,
               categoryIds: 1,
+              // Carried so a storefront card knows which edits a piece belongs
+              // to without a second request per product.
+              collectionIds: 1,
               soldCount: 1,
               createdAt: 1,
               variants: {

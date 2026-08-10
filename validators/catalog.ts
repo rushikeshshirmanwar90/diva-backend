@@ -11,6 +11,7 @@ import {
 } from "@/validators/common";
 import { GENDERS, OCCASIONS, PRODUCT_STATUSES } from "@/models/enums";
 import { toColourValue } from "@/lib/colour";
+import { isYouTubeUrl } from "@/lib/youtube";
 
 // ---------------------------------------------------------------------------
 // Categories
@@ -152,7 +153,17 @@ export const createProductSchema = z
 
     variants: z.array(variantInput).min(1, "A product needs at least one variant").max(60),
     images: z.array(imageInput).max(15).default([]),
-    videoUrl: z.url().optional(),
+    /**
+     * A YouTube link — Shorts, watch or youtu.be. Checked here rather than
+     * accepting any URL, because a non-YouTube link is stored happily and then
+     * renders as an empty player on the product page.
+     *
+     * Nullish so an admin clearing the field removes the video.
+     */
+    videoUrl: z
+      .url()
+      .refine(isYouTubeUrl, "Paste a YouTube link (Shorts, youtu.be or watch)")
+      .nullish(),
 
     /** Pre-tax, in paise. What every price in the system is derived from. */
     pricePaise: paise.min(1, "Give the product a price"),
@@ -197,7 +208,17 @@ export const updateProductSchema = z
     brand: z.string().trim().max(60).optional(),
     variants: z.array(variantInput).min(1).max(60).optional(),
     images: z.array(imageInput).max(15).optional(),
-    videoUrl: z.url().optional(),
+    /**
+     * A YouTube link — Shorts, watch or youtu.be. Checked here rather than
+     * accepting any URL, because a non-YouTube link is stored happily and then
+     * renders as an empty player on the product page.
+     *
+     * Nullish so an admin clearing the field removes the video.
+     */
+    videoUrl: z
+      .url()
+      .refine(isYouTubeUrl, "Paste a YouTube link (Shorts, youtu.be or watch)")
+      .nullish(),
     pricePaise: paise.min(1, "Give the product a price").optional(),
     compareAtPricePaise: paise.nullable().optional(),
     attributes: z

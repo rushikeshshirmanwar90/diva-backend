@@ -130,6 +130,7 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
   const [published, setPublished] = useState(product ? product.status === "ACTIVE" : true);
   const [isFeatured, setIsFeatured] = useState(product?.isFeatured ?? false);
   const [images, setImages] = useState<ProductImage[]>(product?.images ?? []);
+  const [videoUrl, setVideoUrl] = useState(product?.videoUrl ?? "");
   const [variants, setVariants] = useState<VariantForm[]>(
     product?.variants.length ? product.variants.map(toVariantForm) : [blankVariant()],
   );
@@ -220,6 +221,9 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
     // the admin has emptied out.
     compareAtPricePaise: compareAtPrice ? rupeesToPaise(compareAtPrice) : null,
     images,
+    // Null, not undefined: clearing the field must remove the stored video
+    // rather than leave the old link in place on an edit.
+    videoUrl: videoUrl.trim() || null,
     variants: variants.map((variant) => ({
       sku: variant.sku.trim().toUpperCase(),
       // Sent as typed. The server owns the normalisation so that every client —
@@ -445,6 +449,25 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
             )}
 
             {!uploadsConfigured && <UploadsNotConfigured />}
+
+            <label className="field field-wide" style={{ marginTop: 18 }}>
+              <span>YouTube video</span>
+              <input
+                value={videoUrl}
+                onChange={(event) => setVideoUrl(event.target.value)}
+                placeholder="https://youtube.com/shorts/…"
+                inputMode="url"
+                className={fieldErrors.videoUrl ? "has-error" : ""}
+              />
+              {fieldErrors.videoUrl ? (
+                <small className="field-error">{fieldErrors.videoUrl}</small>
+              ) : (
+                <small>
+                  Paste a Shorts, youtu.be or watch link — any of them work. Leave empty for
+                  no video.
+                </small>
+              )}
+            </label>
 
             <MediaPicker
               open={pickingImage}

@@ -43,6 +43,14 @@ export const RATE_LIMITS = {
   write: { limit: 60, windowSeconds: 60 },
   contact: { limit: 5, windowSeconds: 60 * 60 },
   /**
+   * Review submission, per account.
+   *
+   * Ten an hour is far above honest use — a customer reviews the piece they
+   * bought — and far below what makes a compromised account useful for posting
+   * spam across the catalogue.
+   */
+  review: { limit: 10, windowSeconds: 60 * 60 },
+  /**
    * Order creation. Tight, because each attempt reserves stock — an unlimited
    * loop here takes the whole catalogue out of circulation without paying for
    * any of it. Ten is well above what a genuine customer retrying a failed
