@@ -40,7 +40,25 @@ export async function getAdminSession(): Promise<AdminUser | null> {
     return null;
   }
 
-  await connectToDatabase();
+  /**
+   * A dead database is reported as a plain `Error`, never as the driver's own.
+   *
+   * `MongooseServerSelectionError` carries `TopologyDescription` class
+   * instances on it. Thrown out of a Server Component, React tries to serialise
+   * that across the boundary to the client and fails with "Only plain objects
+   * … can be passed to Client Components" — a second, unrelated-looking error
+   * that buries the real one. The page then 500s with no usable message.
+   *
+   * Not swallowed and turned into `null`: that would redirect to the login page
+   * and tell an admin they are signed out when in fact the database is down,
+   * which sends them hunting for the wrong problem entirely.
+   */
+  try {
+    await connectToDatabase();
+  } catch (caught) {
+    console.error("[admin] database unreachable while reading the session", caught);
+    throw new Error("The database is unreachable. Check DB_URL and that the server is running.");
+  }
 
   const user = await UserModel.findById(claims.sub)
     .select("name email role tokenVersion isActive deletedAt avatarUrl emailVerifiedAt")
