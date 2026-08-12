@@ -578,6 +578,35 @@ export function verifyWebhookToken(header: string | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Credential check
+// ---------------------------------------------------------------------------
+
+/**
+ * Proves the API user can log in, and reports the pickup it will ship from.
+ *
+ * Login is the only harmless call that exercises the credentials — everything
+ * else either creates a shipment or needs one to exist. Note what it does *not*
+ * prove: that `SHIPROCKET_PICKUP_LOCATION` names a registered pickup address.
+ * Shiprocket exposes no endpoint to check a nickname, and a wrong one is only
+ * rejected at order creation, so the verifier prints it for a human to compare
+ * against the dashboard.
+ *
+ * Used by `scripts/check-integrations.ts`.
+ */
+export async function verifyCredentials(): Promise<{
+  pickupLocation: string;
+  pickupPincode?: string;
+  channelId?: string;
+}> {
+  invalidateTokenCache();
+  await authToken();
+
+  const { pickupLocation, pickupPincode, channelId } = config();
+
+  return { pickupLocation, pickupPincode, channelId };
+}
+
+// ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
 

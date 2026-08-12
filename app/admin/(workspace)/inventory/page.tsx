@@ -13,13 +13,15 @@ import {
 import { colourLabel, number } from "@/app/admin/_lib/format";
 import {
   EmptyRow,
+  ErrorDialog,
   ErrorRow,
-  LoadingRow,
   PageHeading,
   ProductMark,
   StockBadge,
+  TableSkeleton,
   Toolbar,
 } from "@/app/admin/_components/ui";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { useToast } from "@/app/admin/_components/shell";
 
 /**
@@ -51,6 +53,8 @@ export default function InventoryPage() {
 
   const stats = data?.stats ?? null;
   const products = data?.products ?? [];
+
+  const errorDialog = useErrorDialog(error, reload);
 
   const saveStock = async (productId: string, variantId: string) => {
     setSaving(true);
@@ -134,8 +138,22 @@ export default function InventoryPage() {
         {error && <ErrorRow message={error} onRetry={reload} />}
 
         {loading ? (
-          <LoadingRow label="Loading inventory…" />
-        ) : rows.length === 0 ? (
+          <TableSkeleton
+            columns={8}
+            headers={[
+              "Product",
+              "SKU",
+              "Colour",
+              "On hand",
+              "Reserved",
+              "Available",
+              "Status",
+              "",
+            ]}
+            label="Loading inventory…"
+          />
+        ) : /* A failed load must not be reported as "Nothing in stock yet". */
+        error ? null : rows.length === 0 ? (
           <EmptyRow
             title="Nothing in stock yet"
             description="Publish a product with variants and its stock will appear here."
@@ -242,6 +260,15 @@ export default function InventoryPage() {
           </div>
         )}
       </div>
+
+      <ErrorDialog
+        open={errorDialog.open}
+        title="Could not load inventory"
+        message={error}
+        retrying={errorDialog.retrying}
+        onRetry={errorDialog.retry}
+        onClose={errorDialog.close}
+      />
     </>
   );
 }

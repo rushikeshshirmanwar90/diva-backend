@@ -15,15 +15,17 @@ import {
 import { colourLabel, money } from "@/app/admin/_lib/format";
 import {
   EmptyRow,
+  ErrorDialog,
   ErrorRow,
-  LoadingRow,
   PageHeading,
   Pagination,
   ProductMark,
   ProductStatusBadge,
   StockBadge,
+  TableSkeleton,
   Toolbar,
 } from "@/app/admin/_components/ui";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { useToast } from "@/app/admin/_components/shell";
 
 /**
@@ -98,6 +100,8 @@ export default function ProductsPage() {
 
   const items = result?.items ?? [];
   const meta = result?.meta ?? null;
+
+  const errorDialog = useErrorDialog(error, reload);
 
   // A failed category fetch only costs the filter dropdown and the category
   // column; the list itself stays usable, so its error is not surfaced.
@@ -212,8 +216,18 @@ export default function ProductsPage() {
         {error && <ErrorRow message={error} onRetry={reload} />}
 
         {loading ? (
-          <LoadingRow label="Loading products…" />
-        ) : items.length === 0 ? (
+          <TableSkeleton
+            columns={6}
+            headers={["Product", "Category", "Price", "Inventory", "Status", ""]}
+            label="Loading products…"
+          />
+        ) : /*
+             A failed load leaves `items` empty, and the empty state would then
+             claim "No products yet — add your first piece". That is a lie about
+             the catalogue and invites an admin to re-create products that exist.
+             The error row above is the whole story in that case.
+           */
+        error ? null : items.length === 0 ? (
           <EmptyRow
             title={q || status || category ? "No products match those filters" : "No products yet"}
             description={
@@ -313,6 +327,15 @@ export default function ProductsPage() {
           />
         )}
       </div>
+
+      <ErrorDialog
+        open={errorDialog.open}
+        title="Could not load products"
+        message={error}
+        retrying={errorDialog.retrying}
+        onRetry={errorDialog.retry}
+        onClose={errorDialog.close}
+      />
     </>
   );
 }

@@ -8,11 +8,13 @@ import { ImageField } from "@/app/admin/_components/image-upload";
 import { number } from "@/app/admin/_lib/format";
 import {
   EmptyRow,
+  ErrorDialog,
   ErrorRow,
-  LoadingRow,
   PageHeading,
   StatusBadge,
+  TreeSkeleton,
 } from "@/app/admin/_components/ui";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { useToast } from "@/app/admin/_components/shell";
 
 /**
@@ -72,7 +74,18 @@ export default function CategoriesPage() {
   );
 
   const tree = data ?? [];
+
   const error = formError || loadError;
+
+  /**
+   * Bound to `loadError`, not to the combined `error`.
+   *
+   * The dialog's only action is "Try again", which calls `reload()` — and
+   * reloading the list does nothing for a *save* that failed. A form error
+   * belongs beside the form it came from, where the fix is to change a field
+   * and submit again.
+   */
+  const errorDialog = useErrorDialog(loadError, reload);
 
   const startEdit = (category: CategoryNode) => {
     setCreating(false);
@@ -269,14 +282,17 @@ export default function CategoriesPage() {
         actionIcon={Plus}
       />
 
-      {error && <ErrorRow message={error} />}
+      {error && <ErrorRow message={error} onRetry={reload} />}
 
       <div className="panel list-panel">
         {creating && editor}
 
         {loading ? (
-          <LoadingRow label="Loading categories…" />
-        ) : tree.length === 0 && !creating ? (
+          <TreeSkeleton label="Loading categories…" />
+        ) : /* A failed load must not be reported as "No categories yet". A failed
+               *save* is unrelated to whether the list is empty, so only the load
+               error suppresses it. */
+        loadError ? null : tree.length === 0 && !creating ? (
           <EmptyRow
             title="No categories yet"
             description="Categories organise your catalogue and drive storefront navigation."
@@ -285,6 +301,15 @@ export default function CategoriesPage() {
           <div className="tree-list">{tree.map((category) => renderRow(category))}</div>
         )}
       </div>
+
+      <ErrorDialog
+        open={errorDialog.open}
+        title="Could not load categories"
+        message={loadError}
+        retrying={errorDialog.retrying}
+        onRetry={errorDialog.retry}
+        onClose={errorDialog.close}
+      />
     </>
   );
 }

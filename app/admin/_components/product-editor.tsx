@@ -28,7 +28,7 @@ import {
   useImageUpload,
   useUploadsConfigured,
 } from "@/app/admin/_components/image-upload";
-import { colourLabel, money, paiseToRupeeInput, rupeesToPaise } from "@/app/admin/_lib/format";
+import { colourLabel, paiseToRupeeInput, rupeesToPaise } from "@/app/admin/_lib/format";
 import { COLOUR_SUGGESTIONS } from "@/lib/colour";
 import { MediaPicker } from "@/app/admin/_components/media-picker";
 import { useToast } from "@/app/admin/_components/shell";
@@ -109,16 +109,6 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
   const [compareAtPrice, setCompareAtPrice] = useState(
     paiseToRupeeInput(product?.compareAtPricePaise) || "",
   );
-  /**
-   * The GST rate is no longer edited here, only displayed.
-   *
-   * It still has to be *known* so the pricing card can show the tax-inclusive
-   * total an admin is committing to. An existing product keeps whatever rate it
-   * was saved with; a new one gets the schema default, and neither `gstPercent`
-   * nor `hsnCode` is sent on save — an omitted key leaves the stored value
-   * alone rather than overwriting it with a form default.
-   */
-  const gstPercent = product?.gstPercent ?? 3;
   /**
    * A new product starts **published**, not as a draft.
    *
@@ -542,14 +532,6 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
                 <small>Shown struck through beside the price.</small>
               </label>
             </div>
-            <p className="price-preview-note">
-              {rupeesToPaise(price) > 0
-                ? `Customer pays ${money(
-                    rupeesToPaise(price) +
-                      Math.round((rupeesToPaise(price) * gstPercent) / 100),
-                  )} including ${gstPercent}% GST.`
-                : "Enter a price to see the tax-inclusive total."}
-            </p>
           </section>
 
           <section className="form-card">

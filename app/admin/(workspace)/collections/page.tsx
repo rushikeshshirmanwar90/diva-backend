@@ -7,12 +7,14 @@ import { api, AdminApiError, type Collection, type ProductListItem } from "@/app
 import { number } from "@/app/admin/_lib/format";
 import {
   EmptyRow,
+  ErrorDialog,
   ErrorRow,
-  LoadingRow,
   PageHeading,
   StatusBadge,
   Toolbar,
+  TreeSkeleton,
 } from "@/app/admin/_components/ui";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { useToast } from "@/app/admin/_components/shell";
 
 /**
@@ -91,8 +93,18 @@ export default function CollectionsPage() {
   );
 
   const collections = data?.collections ?? [];
+
   const products = data?.products ?? [];
   const error = formError || loadError;
+
+  /**
+   * Bound to `loadError`, not to the combined `error`.
+   *
+   * The dialog's only action is "Try again", which calls `reload()` — and
+   * reloading the list does nothing for a *save* that failed. A form error
+   * belongs beside the form it came from.
+   */
+  const errorDialog = useErrorDialog(loadError, reload);
 
   const cancel = () => {
     setEditingId(null);
@@ -300,7 +312,7 @@ export default function CollectionsPage() {
         actionIcon={Plus}
       />
 
-      {error && <ErrorRow message={error} />}
+      {error && <ErrorRow message={error} onRetry={reload} />}
 
       <div className="panel list-panel">
         <Toolbar count={collections.length} />
@@ -308,8 +320,11 @@ export default function CollectionsPage() {
         {creating && editor}
 
         {loading ? (
-          <LoadingRow label="Loading collections…" />
-        ) : collections.length === 0 && !creating ? (
+          <TreeSkeleton label="Loading collections…" />
+        ) : /* A failed load must not be reported as "No collections yet". A failed
+               *save* is unrelated to whether the list is empty, so only the load
+               error suppresses it. */
+        loadError ? null : collections.length === 0 && !creating ? (
           <EmptyRow
             title="No collections yet"
             description="Group products into a seasonal edit — Bridal, Festival, Daily Wear."
@@ -360,6 +375,15 @@ export default function CollectionsPage() {
           </div>
         )}
       </div>
+
+      <ErrorDialog
+        open={errorDialog.open}
+        title="Could not load collections"
+        message={loadError}
+        retrying={errorDialog.retrying}
+        onRetry={errorDialog.retry}
+        onClose={errorDialog.close}
+      />
     </>
   );
 }

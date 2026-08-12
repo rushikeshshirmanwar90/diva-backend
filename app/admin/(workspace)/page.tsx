@@ -15,12 +15,15 @@ import {
 import { api, type DashboardStats } from "@/app/admin/_lib/api";
 import { dateOnly, number } from "@/app/admin/_lib/format";
 import {
+  ErrorDialog,
   ErrorRow,
-  LoadingRow,
   MetricCard,
+  MetricGridSkeleton,
   PageHeading,
   ProductMark,
+  TableSkeleton,
 } from "@/app/admin/_components/ui";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 
 /**
  * Overview.
@@ -41,22 +44,45 @@ export default function OverviewPage() {
     { errorMessage: "We could not load your dashboard." },
   );
 
+  const errorDialog = useErrorDialog(error, reload);
+
   if (error) {
     return (
       <>
         <PageHeading eyebrow={dateOnly(new Date())} title="Overview" description="Your store at a glance." />
         <ErrorRow message={error} onRetry={reload} />
+        <ErrorDialog
+          open={errorDialog.open}
+          title="Could not load your dashboard"
+          message={error}
+          retrying={errorDialog.retrying}
+          onRetry={errorDialog.retry}
+          onClose={errorDialog.close}
+        />
       </>
     );
   }
 
+  /**
+   * The loading shape mirrors the loaded one — four metric cards above a table —
+   * rather than a single centred spinner. This is the first screen after signing
+   * in, so it is the one where a layout that assembles itself in two jumps is
+   * most noticeable.
+   */
   if (!stats) {
     return (
       <>
         <PageHeading eyebrow={dateOnly(new Date())} title="Overview" description="Your store at a glance." />
-        <div className="panel">
-          <LoadingRow label="Loading your dashboard…" />
-        </div>
+        <MetricGridSkeleton />
+        <section className="panel" style={{ marginTop: 18 }}>
+          <TableSkeleton
+            columns={4}
+            headers={["Product", "SKU", "Available", "Threshold"]}
+            rows={4}
+            label="Loading your dashboard…"
+            trailingActions={false}
+          />
+        </section>
       </>
     );
   }

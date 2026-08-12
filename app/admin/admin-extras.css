@@ -728,3 +728,168 @@
   .tree-child { padding-left: 16px; }
   .tree-row { flex-wrap: wrap; }
 }
+
+/* --- Skeletons ------------------------------------------------------------
+   Placeholders shaped like the content they stand in for, so the layout does
+   not jump when data lands. A centred spinner is cheaper to write but reflows
+   the whole panel the moment it is replaced by a table, and on a fast
+   connection that flash reads as the page breaking.
+
+   Every skeleton is aria-hidden and sits inside a container marked
+   aria-busy — a screen reader should hear "loading", once, not a description
+   of twelve grey rectangles. */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  /* Sits between the panel white and the #f1f5f9 borders already in use, so
+     placeholders read as absent content rather than as filled cells. */
+  background: #eef2f7;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  100% { transform: translateX(100%); }
+}
+
+/* A sweep that never stops is a vestibular trigger and, for anyone who reads
+   slowly, a permanent distraction. Reduced-motion holds the shape and drops
+   the movement — the placeholder still communicates "not yet". */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+  .skeleton { background: #eef2f7; }
+}
+
+.skeleton-line { height: 11px; }
+.skeleton-line-strong { height: 13px; border-radius: 5px; }
+.skeleton-mark { width: 38px; height: 38px; border-radius: 8px; flex-shrink: 0; }
+.skeleton-badge { width: 82px; height: 22px; border-radius: 999px; }
+.skeleton-action { width: 28px; height: 28px; border-radius: 6px; }
+
+/* Mirrors .table-product so the first column lines up with the real rows. */
+.skeleton-product { display: flex; align-items: center; gap: 12px; }
+.skeleton-product-copy { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+
+.skeleton-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+/* Tree rows (categories, collections) rather than table rows. */
+.skeleton-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.skeleton-tree-row:first-child { border-top: 0; }
+
+/* Dimensions mirror .metric-card / .metric-value / .metric-footnote so the
+   grid does not resize when the real figures arrive. */
+.skeleton-metric { padding: 18px; border: 1px solid #f1f5f9; border-radius: 12px; background: #ffffff; }
+.skeleton-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.skeleton-metric-top .skeleton-action { width: 32px; height: 32px; border-radius: 8px; }
+.skeleton-metric-value { height: 30px; margin-top: 14px; border-radius: 6px; }
+.skeleton-metric-foot { margin-top: 10px; }
+
+/* --- Error dialog ---------------------------------------------------------
+   An inline alert is easy to miss: it renders below the toolbar, and on a
+   screen already showing an empty table it reads as part of the empty state.
+   A failed load is modal in nature — the page behind it has nothing on it — so
+   it gets a dialog with the two things you actually want: try again, or go
+   away and leave the inline notice behind. */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  animation: dialog-fade 0.14s ease-out;
+}
+
+.dialog-panel {
+  width: min(460px, 100%);
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.25);
+  animation: dialog-rise 0.16s ease-out;
+}
+
+@keyframes dialog-fade { from { opacity: 0; } }
+@keyframes dialog-rise { from { opacity: 0; transform: translateY(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop, .dialog-panel { animation: none; }
+}
+
+.dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #dc2626;
+}
+.dialog-icon svg { width: 20px; }
+
+.dialog-panel h2 { color: #0f172a; font-size: 16px; font-weight: 700; }
+.dialog-panel > p {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Collapsed by default: the message above is what an admin needs, and a wall
+   of gateway text under it buries the buttons. Open, it is what gets pasted
+   into a bug report. */
+.dialog-detail { margin-top: 14px; }
+.dialog-detail summary {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.dialog-detail summary:hover { color: #64748b; }
+.dialog-detail pre {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}

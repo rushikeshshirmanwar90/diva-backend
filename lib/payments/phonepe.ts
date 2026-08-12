@@ -499,6 +499,40 @@ export function verifyWebhookAuth(authorizationHeader: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// ---------------------------------------------------------------------------
+// Credential check
+// ---------------------------------------------------------------------------
+
+/**
+ * Proves the configured credentials authenticate, without moving money.
+ *
+ * OAuth is the right probe: it exercises the client id, the secret, the client
+ * *version* and the environment together, and a wrong value in any of them
+ * fails here rather than at a customer's pay button. There is no cheaper call
+ * that does — `/pay` would create a real payment, and a status lookup needs a
+ * transaction that exists.
+ *
+ * The cache is dropped first so a second run re-checks rather than reporting a
+ * token minted before the credentials were edited.
+ *
+ * Used by `scripts/check-integrations.ts`. It lives here so the hosts and the
+ * form-encoding stay in the one module that owns them.
+ */
+export async function verifyCredentials(): Promise<{
+  environment: "SANDBOX" | "PRODUCTION";
+  expiresAtMs: number;
+}> {
+  invalidateTokenCache();
+  await accessToken();
+
+  return {
+    environment: config().environment,
+    // Already reduced by TOKEN_REFRESH_MARGIN_MS, so this is when *we* would
+    // refresh, which is the number worth reporting.
+    expiresAtMs: cachedToken?.expiresAtMs ?? Date.now(),
+  };
+}
+
 /** Events this integration acts on. Anything else is logged and ignored. */
 export const HANDLED_EVENTS = new Set([
   "checkout.order.completed",

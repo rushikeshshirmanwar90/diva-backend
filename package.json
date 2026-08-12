@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file=.env scripts/seed.ts",
     "reset": "tsx --env-file=.env scripts/reset.ts",
-    "openapi:dump": "tsx --env-file=.env scripts/dump-openapi.ts"
+    "openapi:dump": "tsx --env-file=.env scripts/dump-openapi.ts",
+    "check:integrations": "tsx --env-file=.env scripts/check-integrations.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",

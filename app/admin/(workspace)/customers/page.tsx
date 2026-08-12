@@ -13,13 +13,15 @@ import {
 import { initials, number, when } from "@/app/admin/_lib/format";
 import {
   EmptyRow,
+  ErrorDialog,
   ErrorRow,
-  LoadingRow,
   PageHeading,
   Pagination,
   StatusBadge,
+  TableSkeleton,
   Toolbar,
 } from "@/app/admin/_components/ui";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { useToast } from "@/app/admin/_components/shell";
 import { tone } from "@/app/admin/_lib/format";
 
@@ -62,6 +64,8 @@ export default function CustomersPage() {
   const customers = data?.customers ?? [];
   const meta = data?.meta ?? null;
   const stats = data?.stats ?? null;
+
+  const errorDialog = useErrorDialog(error, reload);
 
   const toggleActive = async (customer: Customer) => {
     const suspending = customer.isActive;
@@ -150,8 +154,13 @@ export default function CustomersPage() {
         {error && <ErrorRow message={error} onRetry={reload} />}
 
         {loading ? (
-          <LoadingRow label="Loading customers…" />
-        ) : customers.length === 0 ? (
+          <TableSkeleton
+            columns={6}
+            headers={["Customer", "Status", "Marketing", "Last sign-in", "Joined", ""]}
+            label="Loading customers…"
+          />
+        ) : /* A failed load must not be reported as "No customers yet". */
+        error ? null : customers.length === 0 ? (
           <EmptyRow
             title={applied ? "No customers match that search" : "No customers yet"}
             description={
@@ -227,6 +236,15 @@ export default function CustomersPage() {
 
         {meta && <Pagination page={meta.page} totalPages={meta.totalPages} onChange={setPage} />}
       </div>
+
+      <ErrorDialog
+        open={errorDialog.open}
+        title="Could not load customers"
+        message={error}
+        retrying={errorDialog.retrying}
+        onRetry={errorDialog.retry}
+        onClose={errorDialog.close}
+      />
     </>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
-import { api, AdminApiError, type ProductDetail } from "@/app/admin/_lib/api";
+import { use } from "react";
+import { api, type ProductDetail } from "@/app/admin/_lib/api";
+import { useAsyncData } from "@/app/admin/_lib/use-async-data";
+import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { ProductEditor } from "@/app/admin/_components/product-editor";
-import { ErrorRow, LoadingRow } from "@/app/admin/_components/ui";
+import { EditorSkeleton, ErrorDialog, ErrorRow } from "@/app/admin/_components/ui";
 
 /**
  * Edit an existing product.
@@ -14,36 +16,46 @@ import { ErrorRow, LoadingRow } from "@/app/admin/_components/ui";
  * *inputs* (weights, charges), not the computed output.
  *
  * `params` is a Promise in Next 16; `use()` unwraps it in a Client Component.
+ *
+ * The fetch was hand-rolled in an effect, which meant a failure here was
+ * terminal: the message rendered with no way to try again short of reloading
+ * the browser. `useAsyncData` supplies the same cancellation with a `reload`
+ * attached, so the dialog can offer a retry.
  */
 export default function EditProductPage({ params }: PageProps<"/admin/products/[id]">) {
   const { id } = use(params);
 
-  const [product, setProduct] = useState<ProductDetail | null>(null);
-  const [error, setError] = useState("");
+  const {
+    data: product,
+    loading,
+    error,
+    reload,
+  } = useAsyncData(
+    async () => (await api.get<ProductDetail>(`/admin/products/${id}`)).data,
+    [id],
+    { errorMessage: "Could not load that product." },
+  );
 
-  useEffect(() => {
-    let cancelled = false;
+  const errorDialog = useErrorDialog(error, reload);
 
-    void (async () => {
-      try {
-        const { data } = await api.get<ProductDetail>(`/admin/products/${id}`);
-        if (!cancelled) setProduct(data);
-      } catch (caught) {
-        if (!cancelled) {
-          setError(
-            caught instanceof AdminApiError ? caught.message : "Could not load that product.",
-          );
-        }
-      }
-    })();
+  return (
+    <>
+      {error && <ErrorRow message={error} onRetry={reload} />}
 
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
+      {loading ? (
+        <EditorSkeleton label="Loading product…" />
+      ) : (
+        product && <ProductEditor product={product} />
+      )}
 
-  if (error) return <ErrorRow message={error} />;
-  if (!product) return <LoadingRow label="Loading product…" />;
-
-  return <ProductEditor product={product} />;
+      <ErrorDialog
+        open={errorDialog.open}
+        title="Could not load that product"
+        message={error}
+        retrying={errorDialog.retrying}
+        onRetry={errorDialog.retry}
+        onClose={errorDialog.close}
+      />
+    </>
+  );
 }
