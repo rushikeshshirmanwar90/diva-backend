@@ -5,6 +5,7 @@ import { idParam, slugParam } from "@/validators/common";
 import {
   createReviewSchema,
   listReviewsSchema,
+  listMyReviewsSchema,
   listReviewsForAdminSchema,
   moderateReviewSchema,
   replyToReviewSchema,
@@ -54,6 +55,26 @@ export async function submitReview(request: NextRequest) {
   const result = await reviewService.submitReview(input, principal.userId);
 
   return created(result);
+}
+
+/** `GET /reviews/mine` — a signed-in customer's own reviews, any status. */
+export async function listMine(request: NextRequest) {
+  const principal = await requireAuth(request);
+  const query = parseQuery(request, listMyReviewsSchema);
+
+  const result = await reviewService.listForUser(principal.userId, query);
+
+  return ok(result.items, {
+    meta: paginationMeta({ page: query.page, limit: query.limit, total: result.total }),
+  });
+}
+
+/** `DELETE /reviews/{id}` — a customer withdraws their own review. */
+export async function deleteReview(request: NextRequest, params: unknown) {
+  const principal = await requireAuth(request);
+  const { id } = parseParams(params, idParam);
+
+  return ok(await reviewService.deleteReview(id, principal.userId));
 }
 
 /** `POST /reviews/{id}/helpful` — one vote per account. */

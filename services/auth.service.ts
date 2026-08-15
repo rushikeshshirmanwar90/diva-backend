@@ -18,8 +18,9 @@ import * as refreshTokens from "@/repositories/refreshToken.repository";
 import { enforceRateLimits, resetRateLimit } from "@/lib/api/rate-limit";
 import { queueMail, sendMailNow } from "@/lib/send-mail";
 import { otpEmail, welcomeEmail, passwordResetEmail } from "@/lib/send-mail";
-import { env } from "@/config/env";
-import type { RegisterInput, LoginInput } from "@/validators/auth";
+import { env, googleAuthConfig } from "@/config/env";
+import { OAuth2Client } from "google-auth-library";
+import type { RegisterInput, LoginInput, GoogleLoginInput } from "@/validators/auth";
 import type { Role } from "@/models/enums";
 
 /**
@@ -259,6 +260,107 @@ export async function login(
   }
 
   await resetRateLimit("login", input.email);
+  await users.recordLogin(String(user._id));
+
+  return issueSession(user, context);
+}
+
+/**
+ * One client per process, not per request — `OAuth2Client` has no per-call
+ * state and building it fresh on every sign-in would be pure overhead.
+ * `googleAuthConfig()` is re-checked per call anyway, so a config change still
+ * takes effect without a restart from the caller's point of view.
+ */
+let googleClient: OAuth2Client | null = null;
+
+function getGoogleClient(clientId: string): OAuth2Client {
+  googleClient ??= new OAuth2Client(clientId);
+  return googleClient;
+}
+
+/**
+ * Signs in (or silently registers) with a Google ID token.
+ *
+ * The token is the one thing here that must not be trusted at face value —
+ * it arrives from the browser, and a browser lies. `verifyIdToken` checks the
+ * signature against Google's published keys and that `aud` names *this* app,
+ * which is what turns "a JWT that looks right" into "Google issued this for
+ * us, moments ago, to the account named inside it."
+ *
+ * Matching an existing account happens in two steps and deliberately in this
+ * order:
+ *   1. By `googleId` — the account has signed in with Google before.
+ *   2. By `email` — the account registered with a password and is now using
+ *      Google for the first time. The Google identity is linked rather than
+ *      creating a second account, because Google only hands back a verified
+ *      email for accounts with `email_verified`, which is exactly the bar
+ *      password registration already clears with its own OTP.
+ * Neither matches: a brand-new account, pre-verified, since Google already
+ * vouched for the email.
+ */
+export async function loginWithGoogle(
+  input: GoogleLoginInput,
+  context: RequestContext,
+): Promise<AuthResult> {
+  const config = googleAuthConfig();
+
+  if (!config) {
+    throw ApiError.serviceUnavailable("Google sign-in is not configured.");
+  }
+
+  await enforceRateLimits([{ name: "login", identifier: context.ip }]);
+
+  let payload;
+
+  try {
+    const ticket = await getGoogleClient(config.clientId).verifyIdToken({
+      idToken: input.idToken,
+      audience: config.clientId,
+    });
+    payload = ticket.getPayload();
+  } catch {
+    throw ApiError.unauthenticated("Your Google sign-in could not be verified.");
+  }
+
+  if (!payload?.sub || !payload.email) {
+    throw ApiError.unauthenticated("Your Google sign-in could not be verified.");
+  }
+
+  if (!payload.email_verified) {
+    throw ApiError.forbidden("Your Google account's email address is not verified.");
+  }
+
+  let user = await users.findByGoogleId(payload.sub);
+
+  if (!user) {
+    const existing = await users.findByEmail(payload.email);
+
+    user = existing
+      ? await users.linkGoogleId(String(existing._id), payload.sub)
+      : await users.create({
+          name: payload.name ?? payload.email.split("@")[0]!,
+          email: payload.email,
+          googleId: payload.sub,
+          avatarUrl: payload.picture,
+          role: "customer",
+          emailVerifiedAt: new Date(),
+        });
+  }
+
+  if (!user) {
+    // `linkGoogleId` returns null only if the account was deleted between the
+    // lookup above and the update — vanishingly rare, but a 401 is correct.
+    throw ApiError.unauthenticated("Your Google sign-in could not be verified.");
+  }
+
+  if (!user.isActive || user.deletedAt) {
+    throw ApiError.forbidden("This account has been suspended. Contact support.");
+  }
+
+  if (input.audience === "admin" && !isStaffRole(user.role)) {
+    throw ApiError.forbidden("This account does not have admin access.");
+  }
+
   await users.recordLogin(String(user._id));
 
   return issueSession(user, context);

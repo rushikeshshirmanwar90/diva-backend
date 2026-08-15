@@ -77,6 +77,32 @@ export async function listApproved(productId: string, query: ListReviewsQuery) {
   return { items, total };
 }
 
+/**
+ * A customer's own reviews, across every product — including PENDING and
+ * REJECTED, which `listApproved` must never show a stranger but which the
+ * author has every right to see.
+ */
+export async function listForUser(userId: string, options: { page: number; limit: number }) {
+  const filter = { userId };
+
+  const [items, total] = await Promise.all([
+    ReviewModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((options.page - 1) * options.limit)
+      .limit(options.limit)
+      .populate("productId", "title slug images")
+      .lean(),
+    ReviewModel.countDocuments(filter),
+  ]);
+
+  return { items, total };
+}
+
+/** Hard delete — reviews carry no `deletedAt`; a withdrawn review simply stops existing. */
+export async function remove(id: string) {
+  return ReviewModel.findByIdAndDelete(id).lean();
+}
+
 export async function listForAdmin(options: {
   page: number;
   limit: number;
@@ -107,12 +133,13 @@ export async function listForAdmin(options: {
  * An upsert rather than an insert, because the unique `(productId, userId)`
  * index means a second submission is an *edit*, not a duplicate — and a plain
  * insert would surface that as a driver-level conflict the customer cannot act
- * on. Re-reviewing resets moderation: edited text has not been read yet.
+ * on. Re-reviewing re-approves: edited text is live immediately, same as a
+ * first submission, clearing any earlier moderation decision.
  */
 export async function upsert(input: Partial<ReviewDocument>) {
   return ReviewModel.findOneAndUpdate(
     { productId: input.productId, userId: input.userId },
-    { $set: { ...input, status: "PENDING", moderatedBy: null, moderatedAt: null } },
+    { $set: { ...input, status: "APPROVED", moderatedBy: null, moderatedAt: null } },
     { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
   ).lean();
 }

@@ -88,6 +88,18 @@ const envSchema = z.object({
    */
   COOKIE_DOMAIN: z.string().optional(),
 
+  /**
+   * OAuth 2.0 client id from Google Cloud Console → Credentials.
+   *
+   * Not a secret — it is also embedded in the storefront bundle as
+   * `NEXT_PUBLIC_GOOGLE_CLIENT_ID` so Google Identity Services can run in the
+   * browser. It is used here only as the expected `aud` claim when verifying
+   * an ID token, which is what actually proves the token was issued for this
+   * app. Unset, `googleAuthConfig()` returns null and `/auth/google` answers
+   * 503 rather than accepting tokens it cannot correctly verify.
+   */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+
   // --- Cloudinary ---------------------------------------------------------
   /**
    * The admin UI uploads **unsigned**, using a preset, so these two are the
@@ -275,6 +287,14 @@ export function phonePeConfig() {
     webhookUsername: env.PHONEPE_WEBHOOK_USERNAME,
     webhookPassword: env.PHONEPE_WEBHOOK_PASSWORD,
   };
+}
+
+/** Google Sign-In credentials, or `null` when the integration is not provisioned. */
+export function googleAuthConfig() {
+  const { GOOGLE_CLIENT_ID } = env;
+  if (!GOOGLE_CLIENT_ID) return null;
+
+  return { clientId: GOOGLE_CLIENT_ID };
 }
 
 export function shiprocketConfig() {

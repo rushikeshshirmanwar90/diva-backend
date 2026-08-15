@@ -361,6 +361,18 @@ export type Collection = {
   endsAt?: string | null;
 };
 
+export type HeroCta = { label: string; href: string };
+
+export type HeroSlide = {
+  _id: string;
+  heading: string;
+  subtitle: string;
+  image: ProductImage;
+  cta: HeroCta;
+  displayOrder: number;
+  isActive: boolean;
+};
+
 export type RatesResponse = {
   rates: Record<string, number | undefined>;
   detail: { _id: string; ratePerGramPaise: number; effectiveAt: string }[];

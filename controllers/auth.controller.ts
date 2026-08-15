@@ -12,6 +12,7 @@ import {
   changePasswordSchema,
   refreshSchema,
   updateProfileSchema,
+  googleLoginSchema,
 } from "@/validators/auth";
 import * as authService from "@/services/auth.service";
 import { setSessionCookies, clearSessionCookies, readRefreshCookie } from "@/lib/auth/cookies";
@@ -135,6 +136,17 @@ export async function login(request: NextRequest) {
       userAgent: userAgent(request),
     },
   );
+
+  return deliverSession(request, result, input.audience);
+}
+
+export async function googleLogin(request: NextRequest) {
+  const input = await parseBody(request, googleLoginSchema);
+
+  const result = await authService.loginWithGoogle(input, {
+    ip: clientIp(request),
+    userAgent: userAgent(request),
+  });
 
   return deliverSession(request, result, input.audience);
 }

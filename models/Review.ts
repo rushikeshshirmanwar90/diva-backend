@@ -11,9 +11,9 @@ import { MODERATION_STATUSES, type ModerationStatus } from "@/models/enums";
  * `isVerifiedPurchase: false`, and the storefront says so. For jewellery, where
  * a single purchase is a significant sum, that badge does real work.
  *
- * Reviews default to PENDING and are published only after moderation. Not for
- * censorship — for spam. An unmoderated review form on an e-commerce site
- * becomes an SEO link farm within days.
+ * Reviews default to APPROVED and are visible on the product page immediately —
+ * moderation is opt-out (staff can still reject one after the fact via
+ * `PATCH /admin/reviews/:id`) rather than opt-in.
  */
 
 export interface ReviewDocument {
@@ -66,7 +66,7 @@ const reviewSchema = new mongoose.Schema<ReviewDocument>(
 
     isVerifiedPurchase: { type: Boolean, default: false },
 
-    status: { type: String, enum: MODERATION_STATUSES, default: "PENDING", required: true },
+    status: { type: String, enum: MODERATION_STATUSES, default: "APPROVED", required: true },
     moderatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     moderatedAt: { type: Date },
     rejectionReason: { type: String, maxlength: 300 },

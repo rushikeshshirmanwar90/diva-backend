@@ -10,15 +10,16 @@ import type {
 /**
  * Review business logic.
  *
- * Three rules live here and nowhere else:
+ * Two rules live here and nowhere else:
  *
  *  1. **The author is the session, never the request.** Nothing a client sends
  *     decides who wrote a review.
  *  2. **"Verified purchase" is derived, never claimed.** It comes from the
  *     reviewer's own delivered orders.
- *  3. **Nothing is published unread.** Every submission lands `PENDING`, and a
- *     product's rating only counts approved reviews — so a spam five-star does
- *     not move the average while it sits in the queue.
+ *
+ * Every submission lands `APPROVED` and counts toward the product's rating
+ * immediately — moderation is opt-out (`moderateReview` can still reject one
+ * after the fact) rather than a gate before publication.
  */
 
 export async function listForProduct(slug: string, query: ListReviewsQuery) {
@@ -58,21 +59,14 @@ export async function submitReview(input: CreateReviewInput, userId: string) {
     isVerifiedPurchase,
   });
 
-  /**
-   * An edit can pull an already-published review out of the average.
-   *
-   * The upsert resets status to PENDING, so if the previous version was
-   * approved and counted, the product's rating is now stale by one review until
-   * this is recomputed.
-   */
-  if (existing?.status === "APPROVED") {
-    await refreshProductRating(String(product._id));
-  }
+  // The upsert lands APPROVED whether this is a first submission or an edit,
+  // so the product's rating is stale by one review either way until this runs.
+  await refreshProductRating(String(product._id));
 
   return {
     review: saved,
     replacedExisting: Boolean(existing),
-    status: "PENDING" as const,
+    status: "APPROVED" as const,
   };
 }
 
@@ -121,6 +115,36 @@ export async function listForAdmin(options: {
   productId?: string;
 }) {
   return reviews.listForAdmin(options);
+}
+
+export async function listForUser(userId: string, options: { page: number; limit: number }) {
+  return reviews.listForUser(userId, options);
+}
+
+/**
+ * Withdraws a customer's own review.
+ *
+ * Ownership is checked here rather than relegated to the query filter — the
+ * distinction between "no such review" and "not yours" doesn't matter to the
+ * response (both are a plain 404, so a customer can't probe which reviews
+ * exist under someone else's id), but it matters to this function reading
+ * correctly as "you may only delete what you wrote."
+ */
+export async function deleteReview(id: string, userId: string) {
+  const review = await reviews.findById(id);
+  if (!review || String(review.userId) !== userId) {
+    throw ApiError.notFound("We could not find that review.");
+  }
+
+  await reviews.remove(id);
+
+  // An approved review counted toward the product's average; an unpublished
+  // one never did, so only that case needs the rating recomputed.
+  if (review.status === "APPROVED") {
+    await refreshProductRating(String(review.productId));
+  }
+
+  return { deleted: true };
 }
 
 // ---------------------------------------------------------------------------

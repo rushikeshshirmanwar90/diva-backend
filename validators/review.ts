@@ -33,6 +33,9 @@ export const listReviewsSchema = z
 
 export type ListReviewsQuery = z.infer<typeof listReviewsSchema>;
 
+/** `GET /reviews/mine` — no sort or status filter; it's one customer's list. */
+export const listMyReviewsSchema = z.object({ ...pagination.shape }).strict();
+
 /** The admin moderation queue, which is the only view that sees PENDING. */
 export const listReviewsForAdminSchema = z
   .object({

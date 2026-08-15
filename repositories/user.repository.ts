@@ -59,6 +59,21 @@ export async function findByGoogleId(googleId: string) {
   return UserModel.findOne({ googleId, ...notDeleted }).lean();
 }
 
+/**
+ * Attaches a Google identity to an account that registered with a password.
+ *
+ * Same person signing in a second way, not a new account — the uniqueness
+ * index on `googleId` (sparse) means this throws a duplicate-key error if that
+ * Google identity is already linked to someone else.
+ */
+export async function linkGoogleId(id: string, googleId: string) {
+  return UserModel.findByIdAndUpdate(
+    id,
+    { $set: { googleId } },
+    { returnDocument: 'after' },
+  ).lean();
+}
+
 export async function create(input: {
   name: string;
   email: string;
@@ -67,6 +82,7 @@ export async function create(input: {
   role?: Role;
   marketingOptIn?: boolean;
   googleId?: string;
+  avatarUrl?: string;
   emailVerifiedAt?: Date;
   otpHash?: string;
   otpExpiresAt?: Date;

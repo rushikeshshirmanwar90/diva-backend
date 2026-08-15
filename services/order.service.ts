@@ -2,10 +2,11 @@ import mongoose from "mongoose";
 import { ApiError } from "@/lib/api/errors";
 import { priceProduct, PricingError } from "@/lib/pricing/engine";
 import { getStoreSettings, isPincodeBlocked } from "@/lib/settings";
-import { distributePaise, percentOf } from "@/lib/money";
+import { distributePaise, formatPaise, percentOf } from "@/lib/money";
 import { assertTransition, CUSTOMER_CANCELLABLE } from "@/lib/orders/state-machine";
 import * as orders from "@/repositories/order.repository";
 import * as products from "@/repositories/product.repository";
+import { notify } from "@/services/notification.service";
 import { AddressModel } from "@/models/Address";
 import { CouponModel } from "@/models/Coupon";
 import type { OrderDocument } from "@/models/Order";
@@ -221,6 +222,15 @@ export async function createOrder(input: CreateOrderInput, actor: Actor) {
       notes: input.giftNote,
     });
 
+    void notify({
+      userId: actor.userId,
+      type: "ORDER_PLACED",
+      title: "Order placed",
+      body: `Your order ${order.orderNumber} for ${formatPaise(grandTotalPaise)} has been placed.`,
+      link: `/orders/${order.orderNumber}`,
+      payload: { orderNumber: order.orderNumber },
+    });
+
     return order;
   } catch (error) {
     for (const hold of reserved) {
@@ -310,6 +320,15 @@ export async function cancelOrder(orderNumber: string, userId: string, reason?: 
   }
 
   await releaseHeldStock(order);
+
+  void notify({
+    userId,
+    type: "ORDER_CANCELLED",
+    title: "Order cancelled",
+    body: `Order ${order.orderNumber} has been cancelled.`,
+    link: `/orders/${order.orderNumber}`,
+    payload: { orderNumber: order.orderNumber },
+  });
 
   return cancelled;
 }

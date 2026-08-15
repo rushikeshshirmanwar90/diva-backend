@@ -60,6 +60,22 @@ export const loginSchema = z
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/**
+ * The credential Google Identity Services hands the browser is a signed JWT
+ * (an "ID token"), not a password — this schema only checks it is shaped like
+ * one. Whether it is genuinely Google's, and whose account it names, is
+ * verified server-side against Google's public keys; nothing about that trust
+ * decision happens here.
+ */
+export const googleLoginSchema = z
+  .object({
+    idToken: z.string().min(20, "Invalid Google credential"),
+    audience: z.enum(["storefront", "admin"]).default("storefront"),
+  })
+  .strict();
+
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+
 export const verifyOtpSchema = z
   .object({
     email,

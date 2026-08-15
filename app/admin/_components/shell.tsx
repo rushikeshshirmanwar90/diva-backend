@@ -7,6 +7,7 @@ import {
   Boxes,
   ChevronRight,
   Gem,
+  Home,
   Layers,
   LayoutDashboard,
   LogOut,
@@ -67,6 +68,7 @@ type NavEntry = {
 
 const WORKSPACE_NAV: NavEntry[] = [
   { label: "Overview", href: "/admin", icon: LayoutDashboard, hidden: true },
+  { label: "Home", href: "/admin/home", icon: Home },
   { label: "Products", href: "/admin/products", icon: Gem },
   { label: "Categories", href: "/admin/categories", icon: Tags },
   { label: "Collections", href: "/admin/collections", icon: Layers, hidden: true },

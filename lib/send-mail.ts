@@ -77,7 +77,7 @@ const shell = (body: string) => `
     <tr>
       <td style="padding:28px 32px;border-bottom:2px solid ${GOLD};text-align:center">
         <div style="font-size:26px;letter-spacing:8px;color:${CHARCOAL};font-weight:600">DIVA</div>
-        <div style="font-size:11px;letter-spacing:3px;color:${MUTED};margin-top:6px;text-transform:uppercase">Fine Jewellery</div>
+        <div style="font-size:11px;letter-spacing:3px;color:${MUTED};margin-top:6px;text-transform:uppercase">The Indian Jewel</div>
       </td>
     </tr>
     <tr>
