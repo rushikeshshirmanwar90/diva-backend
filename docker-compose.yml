@@ -1,0 +1,116 @@
+# ============================================================================
+# Docker Compose Configuration for Diva Backend
+# ============================================================================
+#
+# This file defines 1 service:
+#   1. backend  - Next.js API container (diva-backend)
+#
+# MongoDB is hosted separately (external server / Atlas) - not managed here.
+#
+# ENVIRONMENT VARIABLES:
+#   This file reads variables from the .env file in the same directory.
+#   Variables are referenced using ${VARIABLE_NAME} syntax.
+#
+# HOW TO USE:
+#   1. Make sure .env in this directory has real values (DB_URL, JWT_SECRET, ...)
+#   2. Create the shared network once: docker network create diva-network
+#   3. Start the service: docker compose up -d
+#
+# VARIABLE FLOW:
+#   .env file → docker-compose.yml → container
+#
+# NETWORKING:
+#   diva-frontend/docker-compose.yml is a separate stack that reaches this
+#   container over the shared external "diva-network" using the hostname
+#   "diva-backend" (this container's container_name).
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # Backend API Container (Next.js)
+  # --------------------------------------------------------------------------
+  # Receives from .env:
+  #   - DB_URL, DB_NAME              (MongoDB connection)
+  #   - JWT_SECRET, ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL_DAYS
+  #   - SALT_ID, GOOGLE_CLIENT_ID
+  #   - CLOUDINARY_* / NEXT_PUBLIC_CLOUDINARY_*
+  #   - SMTP_*, MAIL_FROM
+  #   - PHONEPE_*
+  #   - SHIPROCKET_*
+  #   - SEED_ADMIN_*, ADMIN_LOGIN_EMAIL
+  #
+  # Note: DB_URL should point to your external MongoDB server
+  #   Example: mongodb://user:pass@mongodb-server-ip:27017/diva
+  #   Or MongoDB Atlas: mongodb+srv://user:pass@cluster.mongodb.net/diva
+  # --------------------------------------------------------------------------
+  backend:
+    image: exponentor/diva-backend:latest
+    container_name: diva-backend
+    ports:
+      - '4100:4000'
+    environment:
+      NODE_ENV: production
+      # Deployment-specific — this stack's public addresses, not from .env.
+      APP_URL: http://localhost:4100
+      STOREFRONT_URL: http://localhost:3100
+      CORS_ALLOWED_ORIGINS: http://localhost:3100,http://localhost:4100
+
+      # --- Database -----------------------------------------------------
+      DB_URL: ${DB_URL}
+      DB_NAME: ${DB_NAME:-diva}
+
+      # --- Auth -----------------------------------------------------------
+      JWT_SECRET: ${JWT_SECRET}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-2}
+      SALT_ID: ${SALT_ID:-10}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+
+      # --- Cloudinary -------------------------------------------------------
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+      NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ${NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-diva}
+
+      # --- Mail -------------------------------------------------------------
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      MAIL_FROM: ${MAIL_FROM}
+
+      # --- Payments: PhonePe -------------------------------------------------
+      PHONEPE_CLIENT_ID: ${PHONEPE_CLIENT_ID}
+      PHONEPE_CLIENT_SECRET: ${PHONEPE_CLIENT_SECRET}
+      PHONEPE_CLIENT_VERSION: ${PHONEPE_CLIENT_VERSION:-1}
+      PHONEPE_ENV: ${PHONEPE_ENV:-SANDBOX}
+      PHONEPE_WEBHOOK_USERNAME: ${PHONEPE_WEBHOOK_USERNAME}
+      PHONEPE_WEBHOOK_PASSWORD: ${PHONEPE_WEBHOOK_PASSWORD}
+
+      # --- Shipping: Shiprocket -----------------------------------------------
+      SHIPROCKET_EMAIL: ${SHIPROCKET_EMAIL}
+      SHIPROCKET_PASSWORD: ${SHIPROCKET_PASSWORD}
+      SHIPROCKET_CHANNEL_ID: ${SHIPROCKET_CHANNEL_ID}
+      SHIPROCKET_PICKUP_LOCATION: ${SHIPROCKET_PICKUP_LOCATION:-Primary}
+      SHIPROCKET_PICKUP_PINCODE: ${SHIPROCKET_PICKUP_PINCODE}
+      SHIPROCKET_WEBHOOK_TOKEN: ${SHIPROCKET_WEBHOOK_TOKEN}
+      SHIPROCKET_DEFAULT_LENGTH_CM: ${SHIPROCKET_DEFAULT_LENGTH_CM:-15}
+      SHIPROCKET_DEFAULT_BREADTH_CM: ${SHIPROCKET_DEFAULT_BREADTH_CM:-12}
+      SHIPROCKET_DEFAULT_HEIGHT_CM: ${SHIPROCKET_DEFAULT_HEIGHT_CM:-8}
+      SHIPROCKET_DEFAULT_WEIGHT_KG: ${SHIPROCKET_DEFAULT_WEIGHT_KG:-0.3}
+
+      # --- Seeding / admin login ----------------------------------------------
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      ADMIN_LOGIN_EMAIL: ${ADMIN_LOGIN_EMAIL}
+    networks:
+      - diva
+    restart: always
+
+networks:
+  diva:
+    name: diva-network
+    external: true

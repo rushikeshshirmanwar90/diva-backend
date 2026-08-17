@@ -28,6 +28,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   reactCompiler: true,
 
   // Mongoose and the Mongo driver load native/optional deps that Turbopack
