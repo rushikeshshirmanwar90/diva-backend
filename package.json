@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file=.env scripts/seed.ts",
+    "seed:categories": "tsx --env-file=.env scripts/seed-categories.ts",
     "reset": "tsx --env-file=.env scripts/reset.ts",
     "openapi:dump": "tsx --env-file=.env scripts/dump-openapi.ts",
     "check:integrations": "tsx --env-file=.env scripts/check-integrations.ts"

@@ -82,6 +82,21 @@ export async function cancelOrder(request: NextRequest, params: unknown) {
   return ok(await orderService.cancelOrder(orderNumber, principal.userId, reason));
 }
 
+/**
+ * Staff: cancel an order, including one already handed to Shiprocket.
+ *
+ * Cancels the live consignment first — if Shiprocket refuses because it has
+ * already been picked up, the order is left as-is rather than marked
+ * cancelled while a parcel is still moving.
+ */
+export async function cancelOrderByStaff(request: NextRequest, params: unknown) {
+  const principal = await requireStaff(request, "shipment:write");
+  const { orderNumber } = parseParams(params, orderNumberParam);
+  const { reason } = await parseBody(request, cancelOrderSchema);
+
+  return ok(await orderService.cancelOrderByStaff(orderNumber, principal.userId, reason));
+}
+
 // ---------------------------------------------------------------------------
 // Payments
 // ---------------------------------------------------------------------------
@@ -218,4 +233,14 @@ export async function assignCourier(request: NextRequest) {
   const order = await orderService.getOrderByNumberForStaff(input.orderNumber);
 
   return ok(await shippingService.assignCourier(String(order._id), input.courierId));
+}
+
+/** Staff: fetch the commercial invoice PDF url for a shipped order. */
+export async function getShipmentInvoice(request: NextRequest, params: unknown) {
+  await requireStaff(request, "shipment:read");
+  const { orderNumber } = parseParams(params, orderNumberParam);
+
+  const order = await orderService.getOrderByNumberForStaff(orderNumber);
+
+  return ok({ invoiceUrl: await shippingService.getInvoiceUrl(String(order._id)) });
 }

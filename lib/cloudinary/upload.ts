@@ -72,7 +72,10 @@ export function createUploadSignature(folder: UploadFolder): UploadSignature {
 
   const timestamp = Math.floor(Date.now() / 1000);
   const targetFolder = `${config.folder}/${UPLOAD_FOLDERS[folder]}`;
-  const allowedFormats = ["jpg", "jpeg", "png", "webp", "avif"];
+  // gif is here for animated hero and collection banners specifically — it is
+  // stored and served as the raw Cloudinary secure_url with no transformation
+  // (see verifyUploadedAsset), so the upload itself is the only gate.
+  const allowedFormats = ["jpg", "jpeg", "png", "webp", "avif", "gif"];
 
   const params = {
     timestamp,

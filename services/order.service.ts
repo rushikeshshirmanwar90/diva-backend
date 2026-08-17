@@ -7,6 +7,7 @@ import { assertTransition, CUSTOMER_CANCELLABLE } from "@/lib/orders/state-machi
 import * as orders from "@/repositories/order.repository";
 import * as products from "@/repositories/product.repository";
 import { notify } from "@/services/notification.service";
+import * as shippingService from "@/services/shipping.service";
 import { AddressModel } from "@/models/Address";
 import { CouponModel } from "@/models/Coupon";
 import type { OrderDocument } from "@/models/Order";
@@ -323,6 +324,52 @@ export async function cancelOrder(orderNumber: string, userId: string, reason?: 
 
   void notify({
     userId,
+    type: "ORDER_CANCELLED",
+    title: "Order cancelled",
+    body: `Order ${order.orderNumber} has been cancelled.`,
+    link: `/orders/${order.orderNumber}`,
+    payload: { orderNumber: order.orderNumber },
+  });
+
+  return cancelled;
+}
+
+/**
+ * Staff-initiated cancellation.
+ *
+ * Unlike `cancelOrder`, this is not limited to `CUSTOMER_CANCELLABLE` — staff
+ * can act while the order machine still allows a CANCELLED transition, which
+ * per `lib/orders/state-machine.ts` extends through SHIPMENT_CREATED. That is
+ * exactly the state that can have a live Shiprocket consignment, so it is
+ * cancelled there first: if Shiprocket refuses (already picked up, already
+ * delivered), the order is left alone rather than marked cancelled while a
+ * parcel is still moving.
+ */
+export async function cancelOrderByStaff(orderNumber: string, staffId: string, reason?: string) {
+  const order = await orders.findByNumber(orderNumber);
+  if (!order) throw ApiError.notFound("We could not find that order.");
+
+  assertTransition(order.status, "CANCELLED");
+
+  if (order.status === "SHIPMENT_CREATED") {
+    await shippingService.cancelShipmentForOrder(String(order._id));
+  }
+
+  const cancelled = await orders.transition(order._id, "CANCELLED", order.status, {
+    note: reason ?? "Cancelled by staff",
+    actorId: staffId,
+    actorRole: "staff",
+    set: { cancelledAt: new Date(), cancellationReason: reason, reservationExpiresAt: null },
+  });
+
+  if (!cancelled) {
+    throw ApiError.conflict("This order changed while it was being cancelled. Please reload.");
+  }
+
+  await releaseHeldStock(order);
+
+  void notify({
+    userId: String(order.userId),
     type: "ORDER_CANCELLED",
     title: "Order cancelled",
     body: `Order ${order.orderNumber} has been cancelled.`,

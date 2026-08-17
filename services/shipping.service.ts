@@ -190,6 +190,27 @@ export async function createShipmentForOrder(orderId: string) {
 }
 
 /**
+ * Cancels the Shiprocket consignment for an order, if one was ever filed.
+ *
+ * Called by staff before handing the order to `orders.transition(..., "CANCELLED", ...)`.
+ * Deliberately does not touch the order itself — if Shiprocket rejects the
+ * cancellation (already picked up, already delivered), the caller must not mark
+ * the order cancelled on our side while the shipment is still live on theirs.
+ */
+export async function cancelShipmentForOrder(orderId: string) {
+  const shipment = await shipments.findByOrderId(orderId);
+  if (!shipment) return null;
+  if (shipment.status === "CANCELLED") return shipment;
+  if (!shipment.shiprocketOrderId) {
+    throw ApiError.conflict("This shipment has no Shiprocket reference.");
+  }
+
+  await shiprocket.cancelShipment(shipment.shiprocketOrderId);
+
+  return shipments.update(shipment._id, { status: "CANCELLED" });
+}
+
+/**
  * Assigns a courier and books the pickup.
  *
  * Split from creation because it is the step that most often needs a human:
@@ -226,6 +247,22 @@ export async function assignCourier(orderId: string, courierId?: number) {
     pickupScheduledAt: new Date(),
     trackingUrl: `https://shiprocket.co/tracking/${awb.awbCode}`,
   });
+}
+
+/**
+ * The commercial invoice PDF for a shipped order, generated on demand.
+ *
+ * Not cached: Shiprocket regenerates it fresh on every call, and it costs
+ * nothing to re-fetch, so there is no staleness to worry about.
+ */
+export async function getInvoiceUrl(orderId: string): Promise<string | null> {
+  const shipment = await shipments.findByOrderId(orderId);
+  if (!shipment) throw ApiError.notFound("No shipment exists for this order yet.");
+  if (!shipment.shiprocketOrderId) {
+    throw ApiError.conflict("This shipment has no Shiprocket reference.");
+  }
+
+  return shiprocket.generateInvoice(shipment.shiprocketOrderId);
 }
 
 // ---------------------------------------------------------------------------
