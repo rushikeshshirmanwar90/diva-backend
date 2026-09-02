@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, createContext, useContext } from "rea
 import {
   Boxes,
   ChevronRight,
+  FileText,
   Gem,
   Home,
   Layers,
@@ -13,6 +14,7 @@ import {
   LogOut,
   Menu,
   Search,
+  Settings,
   Sparkles,
   Tags,
   Users,
@@ -48,9 +50,11 @@ export function useToast() {
 // ---------------------------------------------------------------------------
 
 /**
- * Only screens with a backend behind them appear here. Orders, shipping,
- * discounts and settings have models written but no API surface yet, so linking
- * to them would offer the admin a door that opens onto nothing.
+ * Only screens with a backend behind them appear here. Orders, shipping and
+ * discounts have models written but no API surface yet, so linking to them
+ * would offer the admin a door that opens onto nothing. Settings and
+ * Policies now do have one — see `app/api/v1/admin/settings` and
+ * `app/api/v1/admin/policies`.
  *
  * `hidden` entries stay in this list rather than being deleted. They are still
  * *routes* — reachable by URL, and still matched below so the topbar names the
@@ -74,6 +78,8 @@ const WORKSPACE_NAV: NavEntry[] = [
   { label: "Collections", href: "/admin/collections", icon: Layers, hidden: true },
   { label: "Inventory", href: "/admin/inventory", icon: Boxes, hidden: true },
   { label: "Customers", href: "/admin/customers", icon: Users, hidden: true },
+  { label: "Policies", href: "/admin/policies", icon: FileText },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 export function AdminShell({

@@ -85,6 +85,8 @@ const errorSchema = registry.register(
   z
     .object({
       success: z.literal(false),
+      status: z.number().int(),
+      message: z.string(),
       error: z.object({
         code: z.string(),
         message: z.string(),
@@ -151,7 +153,12 @@ function okResponse(description: string, schema: z.ZodType = z.unknown()) {
       description,
       content: {
         "application/json": {
-          schema: z.object({ success: z.literal(true), data: schema }),
+          schema: z.object({
+            success: z.literal(true),
+            status: z.number().int(),
+            message: z.string(),
+            data: schema,
+          }),
         },
       },
     },
@@ -233,6 +240,8 @@ registry.registerPath({
         "application/json": {
           schema: z.object({
             success: z.literal(true),
+            status: z.number().int(),
+            message: z.string(),
             data: z.array(z.unknown()),
             meta: paginationMetaSchema.and(z.object({ facets: z.unknown() })),
           }),
@@ -490,9 +499,9 @@ export function buildOpenApiDocument() {
         "",
         "**Money:** every amount is an integer count of paise. `129900` is ₹1,299.00.",
         "",
-        "**Envelope:** every response is `{ success, data, meta? }` or",
-        "`{ success: false, error: { code, message, details? } }`. Branch on `error.code`,",
-        "never on `error.message` — messages get reworded, codes do not.",
+        "**Envelope:** every response is `{ success, status, message, data, meta? }` or",
+        "`{ success: false, status, message, error: { code, message, details? } }`. Branch on",
+        "`error.code`, never on `error.message` — messages get reworded, codes do not.",
         "",
         "**Auth:** mobile sends `Authorization: Bearer`. Browsers use httpOnly cookies",
         "and must also send `X-CSRF-Token` on mutations.",

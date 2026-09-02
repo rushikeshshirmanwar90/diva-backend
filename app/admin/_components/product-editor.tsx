@@ -101,6 +101,8 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
   const [title, setTitle] = useState(product?.title ?? "");
   const [shortDescription, setShortDescription] = useState(product?.shortDescription ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
+  const [shippingReturns, setShippingReturns] = useState(product?.shippingReturns ?? "");
+  const [careInstructions, setCareInstructions] = useState(product?.careInstructions ?? "");
   const [categoryIds, setCategoryIds] = useState<string[]>(product?.categoryIds ?? []);
   const [collectionIds, setCollectionIds] = useState<string[]>(product?.collectionIds ?? []);
   const [gender, setGender] = useState(product?.attributes?.gender ?? "");
@@ -196,6 +198,8 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
     title: title.trim(),
     shortDescription: shortDescription.trim() || undefined,
     description: description.trim() || undefined,
+    shippingReturns: shippingReturns.trim() || null,
+    careInstructions: careInstructions.trim() || null,
     categoryIds,
     collectionIds,
     // `tags` is not sent: the field is gone from the form, and an omitted key
@@ -372,6 +376,35 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe materials, details, and the feeling behind this piece."
                   rows={5}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="form-card">
+            <div className="form-card-heading">
+              <div>
+                <h2>Shipping & Care</h2>
+                <p>Custom policies and care guidance for this piece (optional).</p>
+              </div>
+            </div>
+            <div className="field-grid">
+              <label className="field field-wide">
+                <span>Shipping & returns</span>
+                <textarea
+                  value={shippingReturns}
+                  onChange={(event) => setShippingReturns(event.target.value)}
+                  placeholder="Custom shipping, delivery timeline, or return terms for this piece. Enter each point on a new line. Leave blank to use store default policy."
+                  rows={4}
+                />
+              </label>
+              <label className="field field-wide">
+                <span>Care instructions</span>
+                <textarea
+                  value={careInstructions}
+                  onChange={(event) => setCareInstructions(event.target.value)}
+                  placeholder="Custom jewellery care advice, cleaning guidance, or storage tips. Enter each point on a new line. Leave blank to use store default care instructions."
+                  rows={4}
                 />
               </label>
             </div>

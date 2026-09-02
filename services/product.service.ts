@@ -115,7 +115,7 @@ export async function createProduct(input: CreateInput, actorId: string) {
   await refreshCategoryCounts(input.categoryIds);
 
   if (input.collectionIds?.length) {
-    await syncCollections(String(created._id), input.collectionIds);
+    await collections.addProductToCollections(input.collectionIds, String(created._id));
   }
 
   return getProductBySlug(slug, { isStaff: true });
@@ -171,7 +171,7 @@ export async function updateProduct(id: string, input: UpdateInput) {
   await refreshCategoryCounts([...affectedCategories]);
 
   if (input.collectionIds) {
-    await syncCollections(id, input.collectionIds);
+    await collections.addProductToCollections(input.collectionIds, id);
   }
 
   return getProductBySlug(updated.slug, { isStaff: true });
@@ -241,10 +241,11 @@ async function assertCategoriesExist(categoryIds: string[]): Promise<void> {
  * driver.
  */
 async function assertSkusAvailable(skus: string[], exceptId?: string): Promise<void> {
-  for (const sku of skus) {
-    if (await products.skuExists(sku, exceptId)) {
-      throw ApiError.conflict(`SKU "${sku}" is already used by another product.`);
-    }
+  const taken = await products.existingSkus(skus, exceptId);
+  const conflict = skus.find((sku) => taken.has(sku.toUpperCase()));
+
+  if (conflict) {
+    throw ApiError.conflict(`SKU "${conflict}" is already used by another product.`);
   }
 }
 
@@ -252,16 +253,3 @@ async function refreshCategoryCounts(categoryIds: string[]): Promise<void> {
   await Promise.all(categoryIds.map((id) => categories.refreshProductCount(id)));
 }
 
-async function syncCollections(productId: string, collectionIds: string[]): Promise<void> {
-  for (const collectionId of collectionIds) {
-    const collection = await collections.findById(collectionId);
-    if (!collection) continue;
-
-    const memberIds = new Set(collection.productIds.map(String));
-    memberIds.add(productId);
-
-    await collections.updateById(collectionId, {
-      productIds: [...memberIds] as never,
-    });
-  }
-}

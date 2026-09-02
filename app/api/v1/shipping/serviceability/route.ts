@@ -1,5 +1,8 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/checkout.controller";
+import { parseQuery } from "@/lib/api/validate";
+import { serviceabilitySchema } from "@/validators/checkout";
+import * as shippingService from "@/services/shipping.service";
 
 /**
  * `GET /api/v1/shipping/serviceability?pincode=560001&cartValuePaise=4899900`
@@ -8,4 +11,15 @@ import * as controller from "@/controllers/checkout.controller";
  * before payment is the whole point: finding out afterwards means refunding a
  * completed order.
  */
-export const GET = route(({ request }) => controller.serviceability(request));
+export const GET = route(async ({ request }) => {
+  const query = parseQuery(request, serviceabilitySchema);
+  const data = await shippingService.checkServiceability({
+    pincode: query.pincode,
+    cartValuePaise: query.cartValuePaise,
+  });
+
+  return NextResponse.json(
+    { success: true, status: 200, message: "Serviceability checked successfully", data },
+    { status: 200 },
+  );
+});

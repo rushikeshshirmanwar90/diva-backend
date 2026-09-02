@@ -38,7 +38,7 @@ export function corsHeaders(origin: string | null): Record<string, string> {
 
   headers["Access-Control-Allow-Origin"] = origin;
   headers["Access-Control-Allow-Credentials"] = "true";
-  headers["Access-Control-Expose-Headers"] = "X-Request-Id, X-RateLimit-Remaining";
+  headers["Access-Control-Expose-Headers"] = "X-Request-Id";
 
   return headers;
 }

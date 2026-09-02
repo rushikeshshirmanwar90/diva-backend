@@ -1,20 +1,14 @@
 import { createUploadSignature, verifyUploadedAsset, destroyAsset } from "@/lib/cloudinary/upload";
 import type { UploadFolder } from "@/lib/cloudinary/upload";
-import { enforceRateLimit } from "@/lib/api/rate-limit";
 
 /**
  * Upload orchestration.
  *
  * Thin by design — the interesting decisions (what a signature covers, why the
  * upload does not pass through this server) live in lib/cloudinary/upload.ts.
- * What this layer adds is the rate limit: signatures are cheap for us to mint
- * but each one authorises consumption of Cloudinary storage and bandwidth, so
- * an authenticated staff account with a runaway script should not be able to
- * mint thousands.
  */
 
-export async function requestSignature(folder: UploadFolder, actorId: string) {
-  await enforceRateLimit("upload", actorId);
+export async function requestSignature(folder: UploadFolder) {
   return createUploadSignature(folder);
 }
 

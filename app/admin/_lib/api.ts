@@ -305,6 +305,8 @@ export type ProductDetail = {
   videoUrl?: string | null;
   attributes: { gender?: string; occasions: string[]; style?: string; finish?: string; certification?: string };
   tags: string[];
+  shippingReturns?: string | null;
+  careInstructions?: string | null;
   status: "DRAFT" | "ACTIVE" | "ARCHIVED";
   isFeatured: boolean;
   isNewArrival: boolean;
@@ -399,6 +401,77 @@ export type Customer = {
   marketingOptIn: boolean;
   lastLoginAt?: string;
   createdAt: string;
+};
+
+export type StoreAssurance = {
+  title: string;
+  body: string;
+  icon?: string;
+};
+
+export type StoreLocation = {
+  city: string;
+  tag?: string;
+  address: string;
+  phone: string;
+  hours: string;
+  note?: string;
+};
+
+export type ContactPageSettings = {
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  stores?: StoreLocation[];
+};
+
+export type FaqItem = {
+  q: string;
+  a: string;
+};
+
+export type FaqGroup = {
+  group: string;
+  items: FaqItem[];
+};
+
+export type StoreSettings = {
+  storeName: string;
+  supportEmail: string;
+  supportPhone: string;
+  whatsappNumber?: string;
+  supportHours?: string;
+  address?: {
+    line1?: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    country?: string;
+  };
+  social?: {
+    instagram?: string;
+    facebook?: string;
+    youtube?: string;
+    pinterest?: string;
+  };
+  footerBlurb?: string;
+  copyrightText?: string;
+  paymentMethodsNote?: string;
+  assurances?: StoreAssurance[];
+  contactPage?: ContactPageSettings;
+  faqs?: FaqGroup[];
+};
+
+export type PolicySection = { heading: string; body: string[] };
+
+export type PolicyContent = {
+  _id: string;
+  slug: "shipping" | "returns" | "privacy" | "terms";
+  title: string;
+  intro: string;
+  sections: PolicySection[];
+  updatedAt: string;
 };
 
 export type UploadSignature = {

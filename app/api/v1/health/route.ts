@@ -1,5 +1,5 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import { ok } from "@/lib/api/response";
 import { pingDatabase } from "@/lib/db/connect";
 import { isCloudinaryConfigured } from "@/lib/cloudinary/client";
 import { isMailConfigured } from "@/lib/transpoter";
@@ -27,19 +27,27 @@ export const GET = route(
     // throw and turn an unhealthy report into a 500.
     const unpricedProducts = database.ok ? await countUnpriced() : null;
 
-    return ok({
-      status: "ok",
-      uptimeSeconds: Math.round(process.uptime()),
-      database: { connected: database.ok, latencyMs: database.latencyMs },
-      integrations: {
-        cloudinary: isCloudinaryConfigured(),
-        mail: isMailConfigured(),
+    return NextResponse.json(
+      {
+        success: true,
+        status: 200,
+        message: "Service is healthy",
+        data: {
+          status: "ok",
+          uptimeSeconds: Math.round(process.uptime()),
+          database: { connected: database.ok, latencyMs: database.latencyMs },
+          integrations: {
+            cloudinary: isCloudinaryConfigured(),
+            mail: isMailConfigured(),
+          },
+          // Surfaced here because a live product with no price cannot be bought and
+          // nothing else would reveal it — the storefront just quietly refuses.
+          unpricedProducts,
+          checkedInMs: Date.now() - startedAt,
+        },
       },
-      // Surfaced here because a live product with no price cannot be bought and
-      // nothing else would reveal it — the storefront just quietly refuses.
-      unpricedProducts,
-      checkedInMs: Date.now() - startedAt,
-    });
+      { status: 200 },
+    );
   },
   // The handler pings the database itself; letting the wrapper connect first
   // would hide a connection failure behind a generic 503 instead of reporting

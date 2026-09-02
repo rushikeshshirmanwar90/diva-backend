@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
 import mongoose from "mongoose";
 import { ApiError, ErrorCode, isApiError, type ErrorDetail } from "@/lib/api/errors";
-import { failFromApiError, internalFailure } from "@/lib/api/response";
 import { connectToDatabase } from "@/lib/db/connect";
 import { corsHeaders } from "@/lib/http/cors";
 import { clientIp } from "@/lib/http/request";
@@ -108,9 +107,35 @@ function toErrorResponse(
     );
   }
 
-  return apiError.status >= 500 && isProduction
-    ? internalFailure()
-    : failFromApiError(apiError);
+  if (apiError.status >= 500 && isProduction) {
+    return NextResponse.json(
+      {
+        success: false,
+        status: 500,
+        message: "Something went wrong. Please try again.",
+        error: { code: ErrorCode.INTERNAL_ERROR, message: "Something went wrong. Please try again." },
+      },
+      { status: 500 },
+    );
+  }
+
+  // 5xx messages may name internal hosts, drivers or query fragments. Clients
+  // get a fixed string; the real message goes to the log above.
+  const message = apiError.expose ? apiError.message : "Something went wrong. Please try again.";
+
+  return NextResponse.json(
+    {
+      success: false,
+      status: apiError.status,
+      message,
+      error: {
+        code: apiError.code,
+        message,
+        ...(apiError.details?.length ? { details: apiError.details } : {}),
+      },
+    },
+    { status: apiError.status },
+  );
 }
 
 /**

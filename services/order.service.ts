@@ -380,26 +380,36 @@ export async function cancelOrderByStaff(orderNumber: string, staffId: string, r
   return cancelled;
 }
 
-/** Returns reserved units to the pool. Safe to call more than once per order. */
+/**
+ * Returns reserved units to the pool. Safe to call more than once per order.
+ *
+ * Concurrent, not sequential: each line touches its own variant via an atomic
+ * `$inc`, so one line's update has no dependency on another's, and a failure
+ * is caught and logged per line rather than aborting the rest.
+ */
 export async function releaseHeldStock(order: Pick<OrderDocument, "items">) {
-  for (const item of order.items) {
-    await products
-      .releaseStock(String(item.productId), String(item.variantId), item.quantity)
-      .catch((error) => {
-        console.error("[order] Failed to release stock during cancellation", error);
-      });
-  }
+  await Promise.all(
+    order.items.map((item) =>
+      products
+        .releaseStock(String(item.productId), String(item.variantId), item.quantity)
+        .catch((error) => {
+          console.error("[order] Failed to release stock during cancellation", error);
+        }),
+    ),
+  );
 }
 
 /** Converts holds into sales. Called once, when payment is confirmed. */
 export async function commitStockForOrder(order: Pick<OrderDocument, "items">) {
-  for (const item of order.items) {
-    await products
-      .commitStock(String(item.productId), String(item.variantId), item.quantity)
-      .catch((error) => {
-        console.error("[order] Failed to commit stock after payment", error);
-      });
-  }
+  await Promise.all(
+    order.items.map((item) =>
+      products
+        .commitStock(String(item.productId), String(item.variantId), item.quantity)
+        .catch((error) => {
+          console.error("[order] Failed to commit stock after payment", error);
+        }),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------

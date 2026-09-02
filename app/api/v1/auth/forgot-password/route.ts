@@ -1,4 +1,14 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/auth.controller";
+import { parseBody } from "@/lib/api/validate";
+import { forgotPasswordSchema } from "@/validators/auth";
+import * as authService from "@/services/auth.service";
 
-export const POST = route(({ request }) => controller.forgotPassword(request));
+export const POST = route(async ({ request }) => {
+  const input = await parseBody(request, forgotPasswordSchema);
+  const data = await authService.forgotPassword(input.email);
+  return NextResponse.json(
+    { success: true, status: 200, message: "Password reset instructions sent successfully", data },
+    { status: 200 },
+  );
+});

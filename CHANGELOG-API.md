@@ -17,6 +17,23 @@ field or a new enum member is not breaking.
 
 ## Unreleased
 
+### 2026-09-02 — Help footer navigation, dynamic store settings, and policy management
+
+Additive. No existing contracts broken.
+
+Settings shape (`/settings`, `/admin/settings`):
+- **Added** `supportHours`, `footerBlurb`, `copyrightText`, `paymentMethodsNote`, `assurances`, `contactPage` (with physical `stores` list), and `faqs` (categories and question/answer pairs) to `GET /settings` and editable via `PATCH /admin/settings`.
+
+Policies (`/policies/:slug`, `/admin/policies/:slug`):
+- **Added** `privacy` and `terms` to supported policy slugs alongside `shipping` and `returns`. All four policy pages are now dynamic and editable via the admin console with seed fallbacks.
+
+### 2026-09-02 — Product details: customizable shipping & returns and care instructions
+
+Additive. No existing contracts broken.
+
+Product shape:
+- **Added** optional `shippingReturns` and `careInstructions` strings on `Product` for PDP-level policy and care guidance overrides. When omitted or null, storefronts fall back to default store-wide policies and stone-specific care instructions.
+
 ### 2026-08-09 — Fixed-price catalogue: variants lose their pricing inputs
 
 **Breaking, extensively.** The store sells fixed-price 1-gram-gold pieces, not

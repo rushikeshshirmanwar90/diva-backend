@@ -1,8 +1,29 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/checkout.controller";
+import { paginationMeta } from "@/lib/api/pagination";
+import { parseBody, parseQuery } from "@/lib/api/validate";
+import { requireAuth } from "@/lib/auth/session";
+import { createOrderSchema, listOrdersSchema } from "@/validators/checkout";
+import * as orderService from "@/services/order.service";
 
 /** The customer's own order history. */
-export const GET = route(({ request }) => controller.listOrders(request));
+export const GET = route(async ({ request }) => {
+  const principal = await requireAuth(request);
+  const query = parseQuery(request, listOrdersSchema);
+
+  const result = await orderService.listOrdersForUser(principal.userId, query);
+
+  return NextResponse.json(
+    {
+      success: true,
+      status: 200,
+      message: "Orders fetched successfully",
+      data: result.items,
+      meta: paginationMeta({ page: query.page, limit: query.limit, total: result.total }),
+    },
+    { status: 200 },
+  );
+});
 
 /**
  * `POST /api/v1/orders`
@@ -11,4 +32,17 @@ export const GET = route(({ request }) => controller.listOrders(request));
  * see `/payments/phonepe/initiate` — so a customer who abandons the gateway
  * leaves a resumable order rather than nothing.
  */
-export const POST = route(({ request }) => controller.createOrder(request));
+export const POST = route(async ({ request }) => {
+  const principal = await requireAuth(request);
+  const input = await parseBody(request, createOrderSchema);
+
+  const order = await orderService.createOrder(input, {
+    userId: principal.userId,
+    email: principal.email,
+  });
+
+  return NextResponse.json(
+    { success: true, status: 201, message: "Order created successfully", data: order },
+    { status: 201 },
+  );
+});

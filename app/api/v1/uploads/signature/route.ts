@@ -1,5 +1,9 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/catalog.controller";
+import { parseQuery } from "@/lib/api/validate";
+import { uploadSignatureSchema } from "@/validators/catalog";
+import * as uploadService from "@/services/upload.service";
+import { requireStaff } from "@/lib/auth/session";
 
 /**
  * `POST /api/v1/uploads/signature`
@@ -13,4 +17,12 @@ import * as controller from "@/controllers/catalog.controller";
  * set. Retained deliberately: it is the whole server side of the migration
  * back to signed uploads.
  */
-export const POST = route(({ request }) => controller.createUploadSignature(request));
+export const POST = route(async ({ request }) => {
+  await requireStaff(request, "catalog:write");
+  const { folder } = parseQuery(request, uploadSignatureSchema);
+  const data = await uploadService.requestSignature(folder);
+  return NextResponse.json(
+    { success: true, status: 200, message: "Upload signature generated successfully", data },
+    { status: 200 },
+  );
+});

@@ -16,7 +16,6 @@
 
 export { UserModel, type UserDocument } from "@/models/User";
 export { RefreshTokenModel, type RefreshTokenDocument } from "@/models/RefreshToken";
-export { RateLimitModel, type RateLimitDocument } from "@/models/RateLimit";
 
 export { CategoryModel, type CategoryDocument } from "@/models/Category";
 export { CollectionModel, type CollectionDocument } from "@/models/Collection";
@@ -39,6 +38,7 @@ export { WishlistModel, type WishlistDocument } from "@/models/Wishlist";
 export { NotificationModel, type NotificationDocument } from "@/models/Notification";
 export { BlogModel, type BlogDocument } from "@/models/Blog";
 export { SettingModel, type SettingDocument } from "@/models/Setting";
+export { PolicyModel, type PolicyDocument, type PolicySlug } from "@/models/Policy";
 export { ContactMessageModel, type ContactMessageDocument } from "@/models/ContactMessage";
 export { AuditLogModel, type AuditLogDocument } from "@/models/AuditLog";
 

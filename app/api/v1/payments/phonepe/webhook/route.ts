@@ -1,5 +1,6 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/checkout.controller";
+import * as paymentService from "@/services/payment.service";
 
 /**
  * PhonePe's server-to-server callback. **Unauthenticated by our own scheme.**
@@ -16,4 +17,19 @@ import * as controller from "@/controllers/checkout.controller";
  * It must be publicly reachable. For local testing, tunnel it (`ngrok http
  * 4000`) rather than pointing it at localhost.
  */
-export const POST = route(({ request }) => controller.phonePeWebhook(request));
+export const POST = route(async ({ request }) => {
+  // A signature is computed over bytes; re-serialising parsed JSON changes key
+  // order and whitespace and invalidates it — so the raw body is read, not
+  // parsed here.
+  const rawBody = await request.text();
+
+  const data = await paymentService.handleWebhook({
+    authorizationHeader: request.headers.get("authorization"),
+    rawBody,
+  });
+
+  return NextResponse.json(
+    { success: true, status: 200, message: "Webhook processed successfully", data },
+    { status: 200 },
+  );
+});

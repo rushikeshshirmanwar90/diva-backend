@@ -15,7 +15,6 @@ import {
 import { isStaffRole } from "@/lib/auth/rbac";
 import * as users from "@/repositories/user.repository";
 import * as refreshTokens from "@/repositories/refreshToken.repository";
-import { enforceRateLimits, resetRateLimit } from "@/lib/api/rate-limit";
 import { queueMail, sendMailNow } from "@/lib/send-mail";
 import { otpEmail, welcomeEmail, passwordResetEmail } from "@/lib/send-mail";
 import { env, googleAuthConfig } from "@/config/env";
@@ -60,12 +59,7 @@ type RequestContext = { ip: string; userAgent: string };
 // Registration
 // ---------------------------------------------------------------------------
 
-export async function register(input: RegisterInput, context: RequestContext) {
-  await enforceRateLimits([
-    { name: "register", identifier: context.ip },
-    { name: "register", identifier: input.email },
-  ]);
-
+export async function register(input: RegisterInput) {
   const existing = await users.findByEmail(input.email);
 
   if (existing) {
@@ -128,12 +122,7 @@ async function issueOtp(userId: string, name: string, email: string) {
   }
 }
 
-export async function resendOtp(email: string, context: RequestContext) {
-  await enforceRateLimits([
-    { name: "otpRequest", identifier: context.ip },
-    { name: "otpRequest", identifier: email },
-  ]);
-
+export async function resendOtp(email: string) {
   const user = await users.findByEmail(email);
 
   // Silent success for unknown or already-verified accounts — the response must
@@ -149,11 +138,6 @@ export async function verifyOtp(
   input: { email: string; otp: string },
   context: RequestContext,
 ): Promise<AuthResult> {
-  await enforceRateLimits([
-    { name: "otpVerify", identifier: context.ip },
-    { name: "otpVerify", identifier: input.email },
-  ]);
-
   const user = await users.findByEmailWithSecrets(input.email);
 
   if (!user || !user.otpHash || !user.otpExpiresAt) {
@@ -168,8 +152,8 @@ export async function verifyOtp(
    * Attempt cap on the OTP itself.
    *
    * A 6-digit code is only a million possibilities, which a script exhausts in
-   * minutes. The per-IP rate limit alone is insufficient because an attacker can
-   * rotate addresses; the counter lives on the account so it follows the target.
+   * minutes. The counter lives on the account so it follows the target even if
+   * an attacker rotates IPs.
    */
   if ((user.otpAttempts ?? 0) >= OTP_MAX_ATTEMPTS) {
     throw ApiError.rateLimited("Too many incorrect codes. Request a new one.");
@@ -181,7 +165,6 @@ export async function verifyOtp(
   }
 
   await users.markEmailVerified(String(user._id));
-  await resetRateLimit("otpVerify", input.email);
 
   queueMail({ to: user.email, ...welcomeEmail(user.name) });
 
@@ -216,18 +199,6 @@ export async function login(
   input: LoginInput & { email: string },
   context: RequestContext,
 ): Promise<AuthResult> {
-  /**
-   * Limited per IP **and** per account.
-   *
-   * Per-account alone lets one attacker spray a common password across
-   * thousands of accounts, never tripping any single account's counter.
-   * Per-IP alone lets a distributed attacker grind one account. Both are needed.
-   */
-  await enforceRateLimits([
-    { name: "login", identifier: context.ip },
-    { name: "login", identifier: input.email },
-  ]);
-
   const user = await users.findByEmailWithSecrets(input.email);
 
   // `verifyPassword` runs a dummy bcrypt comparison when there is no hash, so
@@ -259,7 +230,6 @@ export async function login(
     throw ApiError.forbidden("This account does not have admin access.");
   }
 
-  await resetRateLimit("login", input.email);
   await users.recordLogin(String(user._id));
 
   return issueSession(user, context);
@@ -307,8 +277,6 @@ export async function loginWithGoogle(
   if (!config) {
     throw ApiError.serviceUnavailable("Google sign-in is not configured.");
   }
-
-  await enforceRateLimits([{ name: "login", identifier: context.ip }]);
 
   let payload;
 
@@ -434,8 +402,6 @@ export async function refresh(
   refreshToken: string,
   context: RequestContext,
 ): Promise<AuthResult> {
-  await enforceRateLimits([{ name: "refresh", identifier: context.ip }]);
-
   const tokenHash = hashRefreshToken(refreshToken);
   const redeemed = await refreshTokens.redeem(tokenHash);
 
@@ -491,12 +457,7 @@ export async function logoutEverywhere(userId: string): Promise<void> {
 // Password reset
 // ---------------------------------------------------------------------------
 
-export async function forgotPassword(email: string, context: RequestContext) {
-  await enforceRateLimits([
-    { name: "passwordReset", identifier: context.ip },
-    { name: "passwordReset", identifier: email },
-  ]);
-
+export async function forgotPassword(email: string) {
   const user = await users.findByEmail(email);
 
   if (user && user.isActive && !user.deletedAt) {

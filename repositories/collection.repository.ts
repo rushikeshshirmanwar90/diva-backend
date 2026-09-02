@@ -92,6 +92,29 @@ export async function syncProductMembership(
   }
 }
 
+/**
+ * Adds a product to each of these collections, atomically.
+ *
+ * One `updateMany` rather than a read-then-write per collection: the previous
+ * shape fetched each collection, added the id in JS, and wrote the whole array
+ * back — N+1 round trips, and a race if two requests touched the same
+ * collection between its read and its write. `$addToSet` needs neither: it is
+ * one call regardless of how many collections, and idempotent under
+ * concurrent writers. A `collectionId` that does not exist (or is soft
+ * deleted) simply matches nothing, same as the old `if (!collection) continue`.
+ */
+export async function addProductToCollections(
+  collectionIds: string[],
+  productId: string,
+): Promise<void> {
+  if (collectionIds.length === 0) return;
+
+  await CollectionModel.updateMany(
+    { _id: { $in: collectionIds }, ...notDeleted },
+    { $addToSet: { productIds: productId } },
+  );
+}
+
 /** Called when a product is deleted, so no collection keeps a dangling id. */
 export async function removeProductEverywhere(productId: string): Promise<void> {
   await CollectionModel.updateMany(

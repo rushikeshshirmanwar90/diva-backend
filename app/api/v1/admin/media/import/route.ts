@@ -1,5 +1,9 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/catalog.controller";
+import { parseBody } from "@/lib/api/validate";
+import { importImageSchema } from "@/validators/catalog";
+import * as mediaService from "@/services/media.service";
+import { requireStaff } from "@/lib/auth/session";
 
 /**
  * `POST /api/v1/admin/media/import`
@@ -12,4 +16,12 @@ import * as controller from "@/controllers/catalog.controller";
  * somewhere we do not control vanishes the day a stranger deletes it, and a
  * product page with a dead hero image is a lost sale nobody gets alerted about.
  */
-export const POST = route(({ request }) => controller.importImage(request));
+export const POST = route(async ({ request }) => {
+  await requireStaff(request, "catalog:write");
+  const input = await parseBody(request, importImageSchema);
+  const data = await mediaService.importByUrl(input);
+  return NextResponse.json(
+    { success: true, status: 200, message: "Image imported successfully", data },
+    { status: 200 },
+  );
+});

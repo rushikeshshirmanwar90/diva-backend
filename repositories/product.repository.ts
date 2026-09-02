@@ -40,6 +40,32 @@ export async function skuExists(sku: string, exceptId?: string): Promise<boolean
   return (await ProductModel.countDocuments(filter)) > 0;
 }
 
+/**
+ * Which of these SKUs are already used by another product.
+ *
+ * One query against the unique `variants.sku` index rather than one
+ * `countDocuments` per SKU — a product create/update carries every variant's
+ * SKU at once, and checking them one at a time is N round trips for what the
+ * index can answer in one.
+ */
+export async function existingSkus(skus: string[], exceptId?: string): Promise<Set<string>> {
+  if (skus.length === 0) return new Set();
+
+  const upper = skus.map((sku) => sku.toUpperCase());
+  const filter: QueryFilter<ProductDocument> = { "variants.sku": { $in: upper } };
+  if (exceptId) filter._id = { $ne: exceptId };
+
+  const matches = await ProductModel.find(filter).select("variants.sku").lean();
+
+  const taken = new Set<string>();
+  for (const product of matches) {
+    for (const variant of product.variants) {
+      if (upper.includes(variant.sku)) taken.add(variant.sku);
+    }
+  }
+  return taken;
+}
+
 export async function create(input: Partial<ProductDocument>) {
   const product = await ProductModel.create(input);
   return product.toObject();

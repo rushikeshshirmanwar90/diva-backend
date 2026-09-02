@@ -1,5 +1,7 @@
 import { after } from "next/server";
+import type { NextRequest } from "next/server";
 import * as auditRepository from "@/repositories/audit.repository";
+import { clientIp, userAgent } from "@/lib/http/request";
 import type { Principal } from "@/lib/auth/session";
 
 /**
@@ -79,6 +81,16 @@ export type AuditContext = {
   userAgent?: string;
   requestId?: string;
 };
+
+/** Builds an `AuditContext` from the request that triggered the mutation. */
+export function auditContext(request: NextRequest, principal: Principal): AuditContext {
+  return {
+    principal,
+    ip: clientIp(request),
+    userAgent: userAgent(request),
+    requestId: request.headers.get("x-request-id") ?? undefined,
+  };
+}
 
 export function record(
   context: AuditContext,

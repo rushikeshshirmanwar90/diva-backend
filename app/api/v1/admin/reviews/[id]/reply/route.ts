@@ -1,7 +1,19 @@
+import { NextResponse } from "next/server";
 import { route } from "@/lib/api/handler";
-import * as controller from "@/controllers/review.controller";
+import { parseBody, parseParams } from "@/lib/api/validate";
+import { idParam } from "@/validators/common";
+import { replyToReviewSchema } from "@/validators/review";
+import * as reviewService from "@/services/review.service";
+import { requireStaff } from "@/lib/auth/session";
 
-/** `POST /api/v1/admin/reviews/:id/reply` — the seller's reply. */
-export const POST = route<{ id: string }>(({ request, params }) =>
-  controller.replyToReview(request, params),
-);
+/** The seller's reply. */
+export const POST = route<{ id: string }>(async ({ request, params }) => {
+  const principal = await requireStaff(request, "review:moderate");
+  const { id } = parseParams(params, idParam);
+  const input = await parseBody(request, replyToReviewSchema);
+  const data = await reviewService.replyToReview(id, input.body, principal.userId);
+  return NextResponse.json(
+    { success: true, status: 200, message: "Reply posted successfully", data },
+    { status: 200 },
+  );
+});

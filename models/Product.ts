@@ -106,6 +106,11 @@ export interface ProductDocument {
 
   tags: string[];
 
+  /** Optional custom copy; falls back to store default policies on the storefront if omitted. */
+  shippingReturns?: string;
+  /** Optional custom copy; falls back to standard care instructions on the storefront if omitted. */
+  careInstructions?: string;
+
   /**
    * What one unit costs, before GST, in paise.
    *
@@ -181,6 +186,8 @@ const productSchema = new mongoose.Schema<ProductDocument>(
     },
 
     tags: { type: [String], default: [], index: true },
+    shippingReturns: { type: String, trim: true, maxlength: 4000 },
+    careInstructions: { type: String, trim: true, maxlength: 4000 },
 
     pricePaise: paiseField({ default: 0, required: true }),
     compareAtPricePaise: { ...paiseField(), default: null },
