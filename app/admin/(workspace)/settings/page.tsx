@@ -291,7 +291,7 @@ export default function SettingsPage() {
           description: draft.contactDescription.trim() || undefined,
           stores: draft.stores.map((s) => ({
             city: s.city.trim(),
-            tag: s.tag.trim() || "Counter",
+            tag: s.tag?.trim() || "Counter",
             address: s.address.trim(),
             phone: s.phone.trim(),
             hours: s.hours.trim(),
