@@ -118,19 +118,38 @@ export async function setVariantStock(productId: string, variantId: string, stoc
  * Returns null when the reservation could not be made.
  */
 export async function reserveStock(productId: string, variantId: string, quantity: number) {
+  const variantObjectId = new mongoose.Types.ObjectId(variantId);
+
+  // `$expr` is only valid at the top level of a query document — it cannot be
+  // nested inside `$elemMatch` (MongoDB rejects that with "$expr can only be
+  // applied to the top-level document"). So the stock/reservedStock
+  // comparison is lifted to a top-level `$expr` that locates the variant by
+  // index, while `$elemMatch` is left only to assert the variant exists and
+  // is active. `arrayFilters` then targets the same variant for the update,
+  // since `$elemMatch` no longer doubles as the positional match.
   return ProductModel.findOneAndUpdate(
     {
       _id: productId,
-      variants: {
-        $elemMatch: {
-          _id: new mongoose.Types.ObjectId(variantId),
-          isActive: true,
-          $expr: { $gte: [{ $subtract: ["$stock", "$reservedStock"] }, quantity] },
+      variants: { $elemMatch: { _id: variantObjectId, isActive: true } },
+      $expr: {
+        $let: {
+          vars: { idx: { $indexOfArray: ["$variants._id", variantObjectId] } },
+          in: {
+            $gte: [
+              {
+                $subtract: [
+                  { $arrayElemAt: ["$variants.stock", "$$idx"] },
+                  { $arrayElemAt: ["$variants.reservedStock", "$$idx"] },
+                ],
+              },
+              quantity,
+            ],
+          },
         },
       },
     },
-    { $inc: { "variants.$.reservedStock": quantity } },
-    { returnDocument: 'after' },
+    { $inc: { "variants.$[v].reservedStock": quantity } },
+    { arrayFilters: [{ "v._id": variantObjectId }], returnDocument: 'after' },
   ).lean();
 }
 

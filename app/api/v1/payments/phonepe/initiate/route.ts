@@ -15,7 +15,11 @@ import { requireAuth } from "@/lib/auth/session";
 export const POST = route(async ({ request }) => {
   const principal = await requireAuth(request);
   const { orderNumber } = await parseBody(request, initiatePaymentSchema);
-  const data = await paymentService.initiatePayment(orderNumber, { userId: principal.userId });
+  const data = await paymentService.initiatePayment(
+    orderNumber,
+    { userId: principal.userId },
+    { origin: request.headers.get("origin") },
+  );
   return NextResponse.json(
     { success: true, status: 200, message: "Payment initiated successfully", data },
     { status: 200 },

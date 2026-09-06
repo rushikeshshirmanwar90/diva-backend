@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import { ApiError } from "@/lib/api/errors";
 import { env } from "@/config/env";
+import { isOriginAllowed } from "@/lib/http/cors";
 import * as phonepe from "@/lib/payments/phonepe";
 import * as orders from "@/repositories/order.repository";
 import * as payments from "@/repositories/payment.repository";
@@ -54,7 +55,17 @@ export type InitiateResult = {
 export async function initiatePayment(
   orderNumber: string,
   actor: { userId: string },
+  context: { origin?: string | null } = {},
 ): Promise<InitiateResult> {
+  // PhonePe returns the customer to whichever storefront sent them, not always
+  // the production one — `diva-frontend` running on localhost during
+  // development is a legitimate caller too. Trusting an arbitrary
+  // client-supplied origin here would be an open redirect, so only an origin
+  // already on the CORS allowlist (which includes `localhost:*` in dev) is
+  // used; anything else falls back to the configured production storefront.
+  const storefrontUrl =
+    context.origin && isOriginAllowed(context.origin) ? context.origin : env.STOREFRONT_URL;
+
   const order = await orders.findOwnedByNumber(orderNumber, actor.userId);
   if (!order) throw ApiError.notFound("We could not find that order.");
 
@@ -101,7 +112,7 @@ export async function initiatePayment(
     amountPaise,
     // PhonePe returns the customer to the storefront, not to this API. The
     // page there polls our status endpoint; it is not itself trusted.
-    redirectUrl: `${env.STOREFRONT_URL}/checkout/payment-return?ref=${merchantTransactionId}`,
+    redirectUrl: `${storefrontUrl}/checkout/payment-return?ref=${merchantTransactionId}`,
     message: `Diva order ${order.orderNumber}`,
     metaInfo: { udf1: order.orderNumber },
   });
