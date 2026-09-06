@@ -28,7 +28,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // "standalone" produces a self-contained server for the Dockerfile in this
+  // repo, but its .next layout is not what Vercel's own build pipeline
+  // expects (it looks for .next/next-server.js.nft.json directly) — so skip
+  // it under Vercel's build, which sets VERCEL=1 automatically.
+  output: process.env.VERCEL ? undefined : "standalone",
   reactCompiler: true,
 
   // Mongoose and the Mongo driver load native/optional deps that Turbopack
