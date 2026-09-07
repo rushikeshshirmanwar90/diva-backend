@@ -107,7 +107,19 @@ function toErrorResponse(
     );
   }
 
-  if (apiError.status >= 500 && isProduction) {
+  /**
+   * Unexpected 5xx are flattened in production so no internal detail escapes.
+   *
+   * `expose` is what separates the two cases, and the distinction matters more
+   * than it looks: a deliberate 503 ("Image uploads are not configured", "The
+   * database is unreachable") is *written for whoever is reading the response*
+   * and names nothing internal. Collapsing those into a generic 500 as well
+   * meant every misconfiguration on a deployed box reported itself as an
+   * anonymous "Something went wrong" — undiagnosable precisely where it
+   * matters, since the same request on localhost has the variable set and
+   * never fails at all.
+   */
+  if (apiError.status >= 500 && isProduction && !apiError.expose) {
     return NextResponse.json(
       {
         success: false,

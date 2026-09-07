@@ -55,14 +55,17 @@ export class ApiError extends Error {
     status: number,
     code: ErrorCodeValue,
     message: string,
-    options?: { details?: ErrorDetail[]; cause?: unknown },
+    options?: { details?: ErrorDetail[]; cause?: unknown; expose?: boolean },
   ) {
     super(message, { cause: options?.cause });
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     if (options?.details) this.details = options.details;
-    this.expose = status < 500;
+    // 4xx is always the client's own mistake and safe to echo. A 5xx is not,
+    // unless it was raised deliberately with a message written for the caller
+    // — see `serviceUnavailable`, which opts in.
+    this.expose = options?.expose ?? status < 500;
 
     Error.captureStackTrace?.(this, ApiError);
   }
@@ -99,8 +102,19 @@ export class ApiError extends Error {
     return new ApiError(500, ErrorCode.INTERNAL_ERROR, message, { cause });
   }
 
+  /**
+   * A dependency this request needed is not available.
+   *
+   * Exposed on purpose. Every caller of this passes a message written for a
+   * human operator ("Image uploads are not configured. Set CLOUDINARY_…",
+   * "The database is unreachable") that names no host, query or driver. Those
+   * messages are the entire diagnostic value of a 503, and hiding them in
+   * production is how a missing environment variable on the deployed box
+   * turns into an unreadable "Something went wrong" — the one failure mode
+   * that cannot be reproduced locally, because locally the variable is set.
+   */
   static serviceUnavailable(message = "Service temporarily unavailable", cause?: unknown) {
-    return new ApiError(503, ErrorCode.SERVICE_UNAVAILABLE, message, { cause });
+    return new ApiError(503, ErrorCode.SERVICE_UNAVAILABLE, message, { cause, expose: true });
   }
 }
 

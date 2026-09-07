@@ -138,7 +138,7 @@ const settingSchema = new mongoose.Schema<SettingDocument>(
     copyrightText: {
       type: String,
       trim: true,
-      default: "© 2026 Diva The Indian Jewel Pvt. Ltd. · GSTIN 29AABCD1234E1ZQ",
+      default: "© 2026 Diva The Indian Jewel · GSTIN 29AABCD1234E1ZQ",
     },
     paymentMethodsNote: {
       type: String,

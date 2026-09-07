@@ -186,7 +186,7 @@ function toDraft(settings: StoreSettings): Draft {
       settings.footerBlurb ||
       "Fine jewellery made in Bengaluru and Jaipur since 1998. Every piece is hallmarked, priced transparently, and made to be worn — not stored.",
     copyrightText:
-      settings.copyrightText || "© 2026 Diva The Indian Jewel Pvt. Ltd. · GSTIN 29AABCD1234E1ZQ",
+      settings.copyrightText || "© 2026 Diva The Indian Jewel · GSTIN 29AABCD1234E1ZQ",
     paymentMethodsNote:
       settings.paymentMethodsNote || "UPI · Cards · Net banking · No-cost EMI",
     assurances: settings.assurances?.length ? settings.assurances : DEFAULT_ASSURANCES,
@@ -639,7 +639,7 @@ export default function SettingsPage() {
                     <span>Copyright & Company Text</span>
                     <input
                       {...field("copyrightText")}
-                      placeholder="© 2026 Diva The Indian Jewel Pvt. Ltd. · GSTIN 29AABCD1234E1ZQ"
+                      placeholder="© 2026 Diva The Indian Jewel · GSTIN 29AABCD1234E1ZQ"
                     />
                   </label>
                   <label className="field">
