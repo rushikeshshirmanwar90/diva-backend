@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import { env } from "@/config/env";
 import { ApiError, ErrorCode } from "@/lib/api/errors";
 import type { Role } from "@/models/enums";
+import type { Audience } from "@/lib/auth/cookies";
 
 /**
  * Token issuing and verification.
@@ -119,8 +120,13 @@ export function generateFamilyId(): string {
   return randomBytes(16).toString("hex");
 }
 
-export function refreshTokenExpiry(): Date {
-  return new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+/** Single source of truth for the TTL split — `cookies.ts` uses it too, so the cookie's `maxAge` and this expiry never drift apart. */
+export function refreshTokenTtlDays(audience: Audience): number {
+  return audience === "admin" ? env.REFRESH_TOKEN_TTL_DAYS : env.STOREFRONT_REFRESH_TOKEN_TTL_DAYS;
+}
+
+export function refreshTokenExpiry(audience: Audience): Date {
+  return new Date(Date.now() + refreshTokenTtlDays(audience) * 24 * 60 * 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------

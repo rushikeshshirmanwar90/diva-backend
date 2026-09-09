@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { env, isProduction } from "@/config/env";
+import { refreshTokenTtlDays } from "@/lib/auth/tokens";
 
 /**
  * Session cookies for the two browser clients.
@@ -64,22 +65,20 @@ export async function setSessionCookies(
   const refreshName =
     audience === "admin" ? COOKIE_NAMES.adminRefresh : COOKIE_NAMES.storefrontRefresh;
 
+  const ttlSeconds = refreshTokenTtlDays(audience) * 24 * 60 * 60;
+
+  // Access token cookie lives for the full session duration (365 days)
   store.set(accessName, tokens.accessToken, {
     ...options,
-    maxAge: 15 * 60,
+    path: "/",
+    maxAge: ttlSeconds,
   });
 
-  /**
-   * The refresh cookie is scoped to the refresh endpoint only.
-   *
-   * A long-lived credential should not be attached to every request to the API;
-   * narrowing its path means it is only ever transmitted where it is actually
-   * needed, which shrinks the surface for it to be logged or leaked.
-   */
+  // Refresh token cookie lives for the full session duration (365 days)
   store.set(refreshName, tokens.refreshToken, {
     ...options,
-    path: "/api/v1/auth",
-    maxAge: env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
+    path: "/",
+    maxAge: ttlSeconds,
   });
 }
 
@@ -92,10 +91,9 @@ export async function clearSessionCookies(audience: Audience): Promise<void> {
   const refreshName =
     audience === "admin" ? COOKIE_NAMES.adminRefresh : COOKIE_NAMES.storefrontRefresh;
 
-  // Deleting a cookie requires the same path and domain it was set with —
-  // a mismatch leaves the original in place and the user stays logged in.
-  store.set(accessName, "", { ...options, maxAge: 0 });
-  store.set(refreshName, "", { ...options, path: "/api/v1/auth", maxAge: 0 });
+  // Deleting cookies requires the same path and domain it was set with
+  store.set(accessName, "", { ...options, path: "/", maxAge: 0 });
+  store.set(refreshName, "", { ...options, path: "/", maxAge: 0 });
 }
 
 export async function readAccessCookie(): Promise<{

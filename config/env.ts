@@ -66,20 +66,16 @@ const envSchema = z.object({
    * signing, so there is no second key to leak.
    */
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
-  ACCESS_TOKEN_TTL: z.string().default("15m"),
+  ACCESS_TOKEN_TTL: z.string().default("365d"),
   /**
-   * How long a session survives — **48 hours**.
-   *
-   * This, not `ACCESS_TOKEN_TTL`, is the number that decides when somebody has
-   * to type their password again. Access tokens lapse every 15 minutes and the
-   * admin console refreshes them silently; nobody sees that happen.
-   *
-   * The window slides: each refresh re-issues the token with a fresh 48 hours,
-   * so an admin who works most days is never signed out, while one who walks
-   * away for a long weekend is. Shortening this is the lever for tightening
-   * security — it caps how long a stolen refresh cookie stays useful.
+   * How long an admin session survives — 365 days persistent until logout.
    */
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(2),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(365),
+
+  /**
+   * How long a storefront session survives — 365 days persistent until logout.
+   */
+  STOREFRONT_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(365),
 
   /**
    * Cookie `Domain` for web sessions, e.g. `.diva.com` so `www.diva.com` can

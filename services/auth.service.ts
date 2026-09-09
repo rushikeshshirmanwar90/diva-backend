@@ -13,6 +13,7 @@ import {
   safeEqual,
 } from "@/lib/auth/tokens";
 import { isStaffRole } from "@/lib/auth/rbac";
+import type { Audience } from "@/lib/auth/cookies";
 import * as users from "@/repositories/user.repository";
 import * as refreshTokens from "@/repositories/refreshToken.repository";
 import { queueMail, sendMailNow } from "@/lib/send-mail";
@@ -179,6 +180,8 @@ export async function verifyOtp(
       emailVerifiedAt: new Date(),
     },
     context,
+    // Registration is a customer-only flow — there is no admin sign-up.
+    "storefront",
   );
 }
 
@@ -232,7 +235,7 @@ export async function login(
 
   await users.recordLogin(String(user._id));
 
-  return issueSession(user, context);
+  return issueSession(user, context, input.audience);
 }
 
 /**
@@ -331,7 +334,7 @@ export async function loginWithGoogle(
 
   await users.recordLogin(String(user._id));
 
-  return issueSession(user, context);
+  return issueSession(user, context, input.audience);
 }
 
 // ---------------------------------------------------------------------------
@@ -349,6 +352,7 @@ async function issueSession(
     emailVerifiedAt?: Date | null;
   },
   context: RequestContext,
+  audience: Audience,
   familyId = generateFamilyId(),
 ): Promise<AuthResult> {
   const userId = String(user._id);
@@ -366,7 +370,7 @@ async function issueSession(
     userId,
     tokenHash,
     familyId,
-    expiresAt: refreshTokenExpiry(),
+    expiresAt: refreshTokenExpiry(audience),
     userAgent: context.userAgent,
     ip: context.ip,
   });
@@ -401,6 +405,7 @@ async function issueSession(
 export async function refresh(
   refreshToken: string,
   context: RequestContext,
+  audience: Audience,
 ): Promise<AuthResult> {
   const tokenHash = hashRefreshToken(refreshToken);
   const redeemed = await refreshTokens.redeem(tokenHash);
@@ -435,7 +440,7 @@ export async function refresh(
 
   // Same family: the chain of rotations from one login stays linked, which is
   // what makes family-wide revocation meaningful.
-  return issueSession(user, context, redeemed.familyId);
+  return issueSession(user, context, audience, redeemed.familyId);
 }
 
 export async function logout(refreshToken?: string): Promise<void> {

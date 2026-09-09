@@ -37,7 +37,7 @@ export async function deliverSession(
           user: result.user,
           accessToken: result.tokens.accessToken,
           refreshToken: result.tokens.refreshToken,
-          expiresIn: 900,
+          expiresIn: 365 * 24 * 60 * 60,
         },
       },
       { status: 200 },

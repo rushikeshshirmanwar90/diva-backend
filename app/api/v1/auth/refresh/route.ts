@@ -20,10 +20,11 @@ export const POST = route(async ({ request }) => {
     throw ApiError.unauthenticated("No refresh token supplied.");
   }
 
-  const result = await authService.refresh(token, {
-    ip: clientIp(request),
-    userAgent: userAgent(request),
-  });
+  const result = await authService.refresh(
+    token,
+    { ip: clientIp(request), userAgent: userAgent(request) },
+    input.audience,
+  );
 
   return deliverSession(request, result, input.audience, "Session refreshed successfully");
 });
