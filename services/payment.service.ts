@@ -4,9 +4,12 @@ import { ApiError } from "@/lib/api/errors";
 import { env } from "@/config/env";
 import { isOriginAllowed } from "@/lib/http/cors";
 import * as phonepe from "@/lib/payments/phonepe";
+import { getStoreSettings } from "@/lib/settings";
 import * as orders from "@/repositories/order.repository";
 import * as payments from "@/repositories/payment.repository";
+import * as products from "@/repositories/product.repository";
 import * as orderService from "@/services/order.service";
+import { notify } from "@/services/notification.service";
 import * as shippingService from "@/services/shipping.service";
 import { CouponModel, CouponRedemptionModel } from "@/models/Coupon";
 import type { OrderDocument } from "@/models/Order";
@@ -81,6 +84,24 @@ export async function initiatePayment(
     throw ApiError.conflict(
       "The price hold on this order has expired. Please place it again to get the current rate.",
     );
+  }
+
+  /**
+   * A retry after a failed payment starts with no stock held — the FAILED
+   * branch of `settleFromGateway` releases it immediately. So before sending
+   * the customer back to the gateway, the hold is taken out again; if someone
+   * else bought the last unit in between, this fails loudly here rather than
+   * letting the customer pay for something that is no longer theirs to get.
+   */
+  if (order.status === "PAYMENT_FAILED") {
+    const settings = await getStoreSettings();
+    await reReserveOrderStock(order);
+    await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_FAILED", {
+      note: "Stock re-held for payment retry",
+      set: {
+        reservationExpiresAt: new Date(Date.now() + settings.pricing.priceLockMinutes * 60_000),
+      },
+    });
   }
 
   const merchantTransactionId = buildTransactionId(order.orderNumber);
@@ -341,16 +362,28 @@ async function settleFromGateway(
   if (status.status === "FAILED") {
     await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_INITIATED", {
       note: status.errorMessage ?? "Payment failed at the gateway",
+      set: { reservationExpiresAt: null },
     });
 
     /**
-     * Stock stays held on failure, until `reservationExpiresAt` lapses.
-     *
-     * Releasing immediately would be worse: the commonest reason a payment
-     * fails is a customer picking the wrong UPI app, and they retry within
-     * seconds. Losing their item in that window turns a recoverable failure
-     * into a lost sale.
+     * Stock is freed the moment the gateway confirms failure, not left held
+     * until `reservationExpiresAt` lapses. A failed payment must not keep
+     * occupying inventory as if the order had gone through — that both starves
+     * other customers of stock they could actually buy and leaves this order
+     * looking "placed" when nothing was paid for. `initiatePayment` re-reserves
+     * it if the customer retries from this same order.
      */
+    await orderService.releaseHeldStock(order);
+
+    void notify({
+      userId: String(order.userId),
+      type: "PAYMENT_FAILED",
+      title: "Payment failed",
+      body: `Your payment for order ${order.orderNumber} did not go through. Nothing was charged.`,
+      link: `/orders/${order.orderNumber}`,
+      payload: { orderNumber: order.orderNumber },
+    });
+
     return settled;
   }
 
@@ -490,6 +523,52 @@ export async function refundOrder(input: {
 function buildTransactionId(orderNumber: string): string {
   const suffix = randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase();
   return `${orderNumber}-${suffix}`.slice(0, 63);
+}
+
+/**
+ * Re-takes the stock hold for an order retrying payment after a failure.
+ *
+ * `reserveStock` decrements `stock` directly, so this is the same atomic,
+ * oversell-proof check `createOrder` uses — not a trust-the-caller `$inc`.
+ * Rolls back whatever it already grabbed if a later line comes up short, so a
+ * partial retry never leaves one item held with no order able to use it.
+ */
+async function reReserveOrderStock(order: Pick<OrderDocument, "items">): Promise<void> {
+  const reserved: Array<{ productId: string; variantId: string; quantity: number }> = [];
+
+  try {
+    for (const item of order.items) {
+      const held = await products.reserveStock(
+        String(item.productId),
+        String(item.variantId),
+        item.quantity,
+      );
+
+      if (!held) {
+        throw ApiError.conflict(
+          `"${item.title}" sold out while your payment was retried. Please review your bag.`,
+        );
+      }
+
+      reserved.push({
+        productId: String(item.productId),
+        variantId: String(item.variantId),
+        quantity: item.quantity,
+      });
+    }
+  } catch (error) {
+    for (const hold of reserved) {
+      await products
+        .releaseStock(hold.productId, hold.variantId, hold.quantity)
+        .catch((releaseError) => {
+          console.error(
+            `[payment] Failed to release re-reservation ${hold.productId}/${hold.variantId}`,
+            releaseError,
+          );
+        });
+    }
+    throw error;
+  }
 }
 
 /**

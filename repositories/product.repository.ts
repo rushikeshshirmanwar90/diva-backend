@@ -107,71 +107,58 @@ export async function setVariantStock(productId: string, variantId: string, stoc
 }
 
 /**
- * Reserves stock for a checkout, atomically.
+ * Reserves stock for a checkout, atomically, by decrementing `stock` directly.
  *
- * The filter carries the availability condition — `stock - reservedStock >=
- * quantity`, expressed as `$expr` — so the database refuses an over-reservation
- * rather than the application checking first and hoping. Under concurrency,
- * check-then-write oversells: two customers both read "1 in stock" and both
- * proceed to payment, and one of them gets an apology email.
+ * The filter carries the availability condition — `stock >= quantity` on the
+ * matched variant — so the database refuses an over-reservation rather than
+ * the application checking first and hoping. Under concurrency, check-then-write
+ * oversells: two customers both read "1 in stock" and both proceed to payment,
+ * and one of them gets an apology email.
+ *
+ * `stock` moves the instant an order is placed, not when payment is confirmed —
+ * so the number an admin set is the number that visibly drops. If the payment
+ * fails or the order is cancelled, `releaseStock` puts it straight back.
  *
  * Returns null when the reservation could not be made.
  */
 export async function reserveStock(productId: string, variantId: string, quantity: number) {
   const variantObjectId = new mongoose.Types.ObjectId(variantId);
 
-  // `$expr` is only valid at the top level of a query document — it cannot be
-  // nested inside `$elemMatch` (MongoDB rejects that with "$expr can only be
-  // applied to the top-level document"). So the stock/reservedStock
-  // comparison is lifted to a top-level `$expr` that locates the variant by
-  // index, while `$elemMatch` is left only to assert the variant exists and
-  // is active. `arrayFilters` then targets the same variant for the update,
-  // since `$elemMatch` no longer doubles as the positional match.
   return ProductModel.findOneAndUpdate(
     {
       _id: productId,
-      variants: { $elemMatch: { _id: variantObjectId, isActive: true } },
-      $expr: {
-        $let: {
-          vars: { idx: { $indexOfArray: ["$variants._id", variantObjectId] } },
-          in: {
-            $gte: [
-              {
-                $subtract: [
-                  { $arrayElemAt: ["$variants.stock", "$$idx"] },
-                  { $arrayElemAt: ["$variants.reservedStock", "$$idx"] },
-                ],
-              },
-              quantity,
-            ],
-          },
-        },
+      variants: {
+        $elemMatch: { _id: variantObjectId, isActive: true, stock: { $gte: quantity } },
       },
     },
-    { $inc: { "variants.$[v].reservedStock": quantity } },
+    { $inc: { "variants.$[v].stock": -quantity } },
     { arrayFilters: [{ "v._id": variantObjectId }], returnDocument: 'after' },
   ).lean();
 }
 
-/** Releases a reservation when a checkout is abandoned or a payment fails. */
+/**
+ * Returns held units to `stock` — a checkout that never paid, a payment that
+ * failed, or an order that was cancelled before shipping. Safe to call more
+ * than once for the same hold; callers are responsible for not double-calling
+ * it for the same order (see `order.service.releaseHeldStock`).
+ */
 export async function releaseStock(productId: string, variantId: string, quantity: number) {
   return ProductModel.updateOne(
     { _id: productId, "variants._id": variantId },
-    { $inc: { "variants.$.reservedStock": -quantity } },
+    { $inc: { "variants.$.stock": quantity } },
   );
 }
 
-/** Converts a reservation into a sale once payment is confirmed. */
+/**
+ * Records a confirmed sale once payment succeeds.
+ *
+ * `stock` was already decremented at reservation time, so this only tallies
+ * `soldCount` — it does not touch inventory again.
+ */
 export async function commitStock(productId: string, variantId: string, quantity: number) {
   return ProductModel.updateOne(
     { _id: productId, "variants._id": variantId },
-    {
-      $inc: {
-        "variants.$.stock": -quantity,
-        "variants.$.reservedStock": -quantity,
-        soldCount: quantity,
-      },
-    },
+    { $inc: { soldCount: quantity } },
   );
 }
 

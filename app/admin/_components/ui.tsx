@@ -655,6 +655,110 @@ export function ErrorDialog({
   );
 }
 
+/**
+ * A destructive action, confirmed in-app rather than with `window.confirm`.
+ *
+ * The native dialog cannot be styled, behaves inconsistently with the
+ * keyboard across browsers, and freezes the tab while it is open — jarring
+ * next to a console that otherwise never blocks. This borrows `ErrorDialog`'s
+ * focus handling so it behaves the same way for a keyboard or screen-reader
+ * user: focus moves to the panel on open and returns to whatever opened it on
+ * close, and Escape cancels.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  tone = "danger",
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: "danger" | "neutral";
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    returnFocusRef.current = document.activeElement;
+    panelRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onCancel();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+
+      const active = document.activeElement;
+      if (!active || active === document.body) {
+        (returnFocusRef.current as HTMLElement | null)?.focus?.();
+      }
+    };
+  }, [open, onCancel]);
+
+  const onBackdropClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.target === event.currentTarget && !busy) onCancel();
+    },
+    [onCancel, busy],
+  );
+
+  if (!open) return null;
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onBackdropClick}>
+      <div
+        ref={panelRef}
+        className="dialog-panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="admin-confirm-dialog-title"
+        aria-describedby="admin-confirm-dialog-message"
+        tabIndex={-1}
+      >
+        <div className="dialog-icon">
+          <TriangleAlert />
+        </div>
+
+        <h2 id="admin-confirm-dialog-title">{title}</h2>
+        <p id="admin-confirm-dialog-message">{message}</p>
+
+        <div className="dialog-actions">
+          <button className="secondary-button" onClick={onCancel} disabled={busy}>
+            {cancelLabel}
+          </button>
+          <button
+            className={tone === "danger" ? "danger-button" : "primary-button"}
+            onClick={onConfirm}
+            disabled={busy}
+          >
+            {busy ? <Loader2 className="spin" /> : null}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ErrorRow({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="form-alert" role="alert">

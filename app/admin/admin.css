@@ -345,6 +345,22 @@
 .primary-button svg, .secondary-button svg, .select-button svg { width: 15px; height: 15px; }
 .text-button svg { width: 15px; height: 15px; }
 
+/* Same shape as `.primary-button`, red rather than gold — for a confirmation
+   whose action removes or hides something, where the gold gradient would read
+   as an ordinary, safe next step. */
+.danger-button {
+  padding: 9px 18px;
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+.danger-button:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.45);
+  transform: translateY(-1px);
+}
+.danger-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
 /* ---------------------------------------------------------------------------
    Attractive Cards & Metric Grid
    --------------------------------------------------------------------------- */
@@ -541,6 +557,34 @@
 }
 .filter-pills button:hover { background: #fffbeb; border-color: #fde68a; color: #b45309; }
 .filter-pills svg { width: 13px; }
+
+/*
+ * `.filter-pills` and `.sort-field` hold native <select> elements alongside
+ * the pill buttons above — without this, a <select> falls through to the
+ * browser's own chrome (system font, square corners, OS-grey) sitting right
+ * next to a styled button and reads as a broken control, not a plain one.
+ */
+.filter-pills select,
+.sort-field select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-pills select:hover,
+.filter-pills select:focus-visible,
+.sort-field select:hover,
+.sort-field select:focus-visible {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+.sort-field { display: inline-flex; }
 
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .result-count { color: #64748b; font-size: 12px; font-weight: 600; }

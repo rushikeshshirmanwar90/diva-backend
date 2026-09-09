@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import { IndianRupee, Pencil, Search, Trash2, X } from "lucide-react";
 import { useAsyncData } from "@/app/admin/_lib/use-async-data";
 import {
   api,
   AdminApiError,
   type ProductListItem,
   type Category,
+  type DashboardStats,
   type PaginationMeta,
 } from "@/app/admin/_lib/api";
-import { colourLabel, money } from "@/app/admin/_lib/format";
+import { colourLabel, money, number } from "@/app/admin/_lib/format";
 import {
+  ConfirmDialog,
   EmptyRow,
   ErrorDialog,
   ErrorRow,
@@ -50,8 +52,12 @@ export default function ProductsPage() {
   const q = params.get("q") ?? "";
   const status = params.get("status") ?? "";
   const category = params.get("category") ?? "";
+  const sort = params.get("sort") ?? "";
+  const inStockOnly = params.get("inStock") === "true";
 
-  const [showFilters, setShowFilters] = useState(Boolean(status || category));
+  const [showFilters, setShowFilters] = useState(
+    Boolean(status || category || sort || inStockOnly),
+  );
 
   const setParam = useCallback(
     (updates: Record<string, string | number | undefined>) => {
@@ -71,6 +77,40 @@ export default function ProductsPage() {
     [params, router],
   );
 
+  // --- Search box -----------------------------------------------------------
+
+  /**
+   * Uncontrolled and keyed on `q`, like the rest of this page's filters. That
+   * remount is what resyncs the box when a search is set from outside it — the
+   * header search, browser back/forward, "Clear" — without a controlled
+   * `value` prop and the render-time resync that would need.
+   *
+   * Typing debounces into the URL via `onChange`; Enter still commits
+   * immediately, for anyone who types fast and expects that to just work.
+   */
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const commitSearch = useCallback(
+    (value: string) => {
+      clearTimeout(debounceRef.current);
+      setParam({ q: value });
+    },
+    [setParam],
+  );
+
+  const onSearchChange = (value: string) => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => commitSearch(value), 350);
+  };
+
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  // Text relevance is only meaningful alongside a search term. An explicit
+  // sort picked from the dropdown always wins; absent one, a search ranks by
+  // relevance and a plain browse falls back to newest.
+  const effectiveSort = sort || (q ? "relevance" : "newest");
+
   const {
     data: result,
     loading,
@@ -84,9 +124,8 @@ export default function ProductsPage() {
         q: q || undefined,
         status: status || undefined,
         category: category || undefined,
-        // Text relevance is only meaningful alongside a search term; without
-        // one it degrades to an arbitrary order, so fall back to newest.
-        sort: q ? "relevance" : "newest",
+        inStock: inStockOnly || undefined,
+        sort: effectiveSort,
       });
 
       return {
@@ -94,7 +133,7 @@ export default function ProductsPage() {
         meta: (response.meta as unknown as PaginationMeta) ?? null,
       };
     },
-    [page, q, status, category],
+    [page, q, status, category, sort, inStockOnly],
     { errorMessage: "Could not load products." },
   );
 
@@ -110,6 +149,13 @@ export default function ProductsPage() {
     [],
   );
 
+  // Same treatment: the catalogue summary strip is a bonus, not the page —
+  // if it fails to load, the table underneath is still fully usable.
+  const { data: stats } = useAsyncData(
+    async () => (await api.get<DashboardStats>("/admin/stats")).data,
+    [],
+  );
+
   const categoryName = useMemo(() => {
     const map = new Map((categories ?? []).map((entry) => [entry._id, entry.name]));
     return (ids: string[]) =>
@@ -119,19 +165,26 @@ export default function ProductsPage() {
         .join(", ") || "—";
   }, [categories]);
 
-  const remove = async (product: ProductListItem) => {
-    if (!window.confirm(`Archive "${product.title}"? It will be hidden from the storefront.`)) {
-      return;
-    }
+  const [pendingArchive, setPendingArchive] = useState<ProductListItem | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
+  const confirmArchive = async () => {
+    if (!pendingArchive) return;
+
+    setArchiving(true);
     try {
-      await api.delete(`/admin/products/${product._id}`);
-      notify(`${product.title} archived`);
+      await api.delete(`/admin/products/${pendingArchive._id}`);
+      notify(`${pendingArchive.title} archived`);
+      setPendingArchive(null);
       void reload();
     } catch (caught) {
       notify(caught instanceof AdminApiError ? caught.message : "Could not archive that product.");
+    } finally {
+      setArchiving(false);
     }
   };
+
+  const activeFilterCount = [status, category, sort, inStockOnly].filter(Boolean).length;
 
   return (
     <>
@@ -143,29 +196,91 @@ export default function ProductsPage() {
         actionHref="/admin/products/new"
       />
 
+      {stats && (
+        <div className="order-summary-row">
+          <div>
+            <span>Total products</span>
+            <strong>{number(stats.catalogue.total)}</strong>
+          </div>
+          <div>
+            <span>Active</span>
+            <strong>{number(stats.catalogue.active)}</strong>
+          </div>
+          <div>
+            <span>Draft</span>
+            <strong>{number(stats.catalogue.draft)}</strong>
+          </div>
+          <div>
+            <span>Archived</span>
+            <strong>{number(stats.catalogue.archived)}</strong>
+          </div>
+        </div>
+      )}
+
+      {stats && stats.pricing.unpriced > 0 && (
+        <div className="inventory-alert">
+          <div className="alert-icon">
+            <IndianRupee />
+          </div>
+          <div>
+            <strong>
+              {stats.pricing.unpriced} product{stats.pricing.unpriced === 1 ? "" : "s"} can&apos;t
+              be bought yet
+            </strong>
+            <span>No usable price is set, so the storefront hides their buy button.</span>
+          </div>
+        </div>
+      )}
+
       <div className="filter-strip">
-        {/*
-          Keyed on `q` and uncontrolled. Remounting when the URL query changes
-          resyncs the box — including when the header search navigates here —
-          without an effect that writes state during render.
-        */}
         <form
           key={q}
           className="inline-search"
           onSubmit={(event) => {
             event.preventDefault();
             const field = event.currentTarget.elements.namedItem("q") as HTMLInputElement;
-            setParam({ q: field.value });
+            commitSearch(field.value);
           }}
         >
           <Search />
           <input
+            ref={searchInputRef}
             name="q"
             aria-label="Search products"
             placeholder="Search products, SKU, or category"
             defaultValue={q}
+            onChange={(event) => onSearchChange(event.target.value)}
           />
+          {q && (
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Clear search"
+              onClick={() => {
+                clearTimeout(debounceRef.current);
+                if (searchInputRef.current) searchInputRef.current.value = "";
+                commitSearch("");
+                searchInputRef.current?.focus();
+              }}
+            >
+              <X />
+            </button>
+          )}
         </form>
+
+        <label className="sort-field">
+          <span className="sr-only">Sort by</span>
+          <select
+            value={effectiveSort}
+            onChange={(event) => setParam({ sort: event.target.value })}
+          >
+            {q && <option value="relevance">Best match</option>}
+            <option value="newest">Newest first</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="popular">Best selling</option>
+          </select>
+        </label>
 
         {showFilters && (
           <div className="filter-pills">
@@ -192,10 +307,20 @@ export default function ProductsPage() {
                 <option value="ARCHIVED">Archived</option>
               </select>
             </label>
-            {(status || category || q) && (
+            <button
+              type="button"
+              className={`secondary-button ${inStockOnly ? "button-selected" : ""}`}
+              aria-pressed={inStockOnly}
+              onClick={() => setParam({ inStock: inStockOnly ? undefined : "true" })}
+            >
+              In stock only
+            </button>
+            {activeFilterCount > 0 && (
               <button
                 className="secondary-button"
-                onClick={() => setParam({ status: "", category: "", q: "" })}
+                onClick={() =>
+                  setParam({ status: "", category: "", sort: "", inStock: "", q: "" })
+                }
               >
                 Clear
               </button>
@@ -229,13 +354,17 @@ export default function ProductsPage() {
            */
         error ? null : items.length === 0 ? (
           <EmptyRow
-            title={q || status || category ? "No products match those filters" : "No products yet"}
+            title={
+              q || status || category || inStockOnly
+                ? "No products match those filters"
+                : "No products yet"
+            }
             description={
-              q || status || category
+              q || status || category || inStockOnly
                 ? "Try a broader search, or clear the filters to see the whole catalogue."
                 : "Add your first piece to start building the catalogue."
             }
-            action={q || status || category ? undefined : "Add product"}
+            action={q || status || category || inStockOnly ? undefined : "Add product"}
             actionHref="/admin/products/new"
           />
         ) : (
@@ -255,13 +384,16 @@ export default function ProductsPage() {
               </thead>
               <tbody>
                 {items.map((product) => {
-                  const available = product.variants
-                    .filter((variant) => variant.isActive)
-                    .reduce(
-                      (total, variant) =>
-                        total + Math.max(0, variant.stock - variant.reservedStock),
-                      0,
-                    );
+                  const activeVariants = product.variants.filter((variant) => variant.isActive);
+                  const available = activeVariants.reduce(
+                    (total, variant) => total + Math.max(0, variant.stock - variant.reservedStock),
+                    0,
+                  );
+                  const lowStockVariants = activeVariants.filter(
+                    (variant) =>
+                      Math.max(0, variant.stock - variant.reservedStock) <=
+                      variant.lowStockThreshold,
+                  ).length;
 
                   return (
                     <tr key={product._id}>
@@ -285,9 +417,26 @@ export default function ProductsPage() {
                       </td>
                       <td>{categoryName(product.categoryIds)}</td>
                       <td className="table-strong">
-                        {money(product.pricePaise)}
+                        {product.pricePaise > 0 ? (
+                          money(product.pricePaise)
+                        ) : (
+                          <span
+                            style={{ color: "#b45309", fontWeight: 600 }}
+                            title="No usable price is set — the storefront hides this product's buy button"
+                          >
+                            Not priced
+                          </span>
+                        )}
                       </td>
-                      <td>{available} units</td>
+                      <td>
+                        {available} units
+                        {lowStockVariants > 0 && (
+                          <span className="item-count">
+                            {lowStockVariants} of {activeVariants.length} variant
+                            {activeVariants.length === 1 ? "" : "s"} low
+                          </span>
+                        )}
+                      </td>
                       <td>
                         {product.status === "ACTIVE" ? (
                           <StockBadge available={available} threshold={2} />
@@ -305,7 +454,7 @@ export default function ProductsPage() {
                         </Link>
                         <button
                           className="row-action"
-                          onClick={() => remove(product)}
+                          onClick={() => setPendingArchive(product)}
                           aria-label={`Archive ${product.title}`}
                         >
                           <Trash2 />
@@ -327,6 +476,20 @@ export default function ProductsPage() {
           />
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingArchive != null}
+        title="Archive this product?"
+        message={
+          pendingArchive
+            ? `"${pendingArchive.title}" will be hidden from the storefront immediately. You can restore it later by setting its status back to Active.`
+            : ""
+        }
+        confirmLabel="Archive"
+        busy={archiving}
+        onConfirm={confirmArchive}
+        onCancel={() => setPendingArchive(null)}
+      />
 
       <ErrorDialog
         open={errorDialog.open}
