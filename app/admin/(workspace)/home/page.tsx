@@ -3,8 +3,19 @@
 import { useState } from "react";
 import { Check, GripVertical, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAsyncData } from "@/app/admin/_lib/use-async-data";
-import { api, AdminApiError, type HeroSlide, type ProductImage } from "@/app/admin/_lib/api";
-import { HERO_LINK_OPTIONS, type HeroLinkHref } from "@/lib/hero-links";
+import {
+  api,
+  AdminApiError,
+  type Category,
+  type HeroSlide,
+  type ProductImage,
+} from "@/app/admin/_lib/api";
+import {
+  categoryHref,
+  categorySlugFromHref,
+  HERO_LINK_OPTIONS,
+  type HeroLinkHref,
+} from "@/lib/hero-links";
 import {
   EmptyRow,
   ErrorDialog,
@@ -22,9 +33,11 @@ import { useToast } from "@/app/admin/_components/shell";
  * The homepage hero — the rotating banner at the top of the storefront.
  *
  * Four fields, deliberately: a title, a subtitle, a button label and where
- * the button goes. The button's destination is a dropdown of the
- * storefront's own sections (`HERO_LINK_OPTIONS`), not a free-text URL — a
- * slide can never link off-site or at a mistyped route.
+ * the button goes. The button's destination is a dropdown, not a free-text
+ * URL — a slide can never link off-site or at a mistyped route. It lists the
+ * storefront's fixed sections (`HERO_LINK_OPTIONS`) alongside every catalogue
+ * category, which are loaded rather than hard-coded because admins add and
+ * rename them.
  *
  * `displayOrder` is a plain number an admin types in, not a drag-and-drop
  * list. Fewer than a handful of slides typically exist at once, and the
@@ -72,9 +85,36 @@ export default function HomePage() {
     { errorMessage: "Could not load the hero slides." },
   );
 
+  /**
+   * `includeInactive` so a hidden category is still offered — the server
+   * accepts one (a slide is often built before its category goes live), and
+   * silently omitting them here would make a saved-but-hidden destination
+   * impossible to re-select when editing the slide later.
+   */
+  const { data: categoryData } = useAsyncData(
+    async () => (await api.get<Category[]>("/categories", { includeInactive: true })).data,
+    [],
+    { errorMessage: "Could not load the categories." },
+  );
+
   const slides = data ?? [];
+  const categories = categoryData ?? [];
   const error = formError || loadError;
   const errorDialog = useErrorDialog(loadError, reload);
+
+  /**
+   * A slide can hold a destination that is no longer offered — the category
+   * was deleted, or renamed to a new slug. A `<select>` whose value matches no
+   * option renders as blank and then silently saves whatever option the admin
+   * lands on, quietly repointing a live banner. Surfacing it as a real,
+   * selected entry keeps the damage visible instead.
+   */
+  const orphanedHref =
+    draft.ctaHref &&
+    !HERO_LINK_OPTIONS.some((option) => option.href === draft.ctaHref) &&
+    !categories.some((entry) => categoryHref(entry.slug) === draft.ctaHref)
+      ? draft.ctaHref
+      : null;
 
   const cancel = () => {
     setEditingId(null);
@@ -200,12 +240,41 @@ export default function HomePage() {
               setDraft({ ...draft, ctaHref: event.target.value as HeroLinkHref })
             }
           >
-            {HERO_LINK_OPTIONS.map((option) => (
-              <option key={option.href} value={option.href}>
-                {option.label}
-              </option>
-            ))}
+            <optgroup label="Sections">
+              {HERO_LINK_OPTIONS.map((option) => (
+                <option key={option.href} value={option.href}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+
+            {categories.length > 0 && (
+              <optgroup label="Categories">
+                {categories.map((entry) => (
+                  <option key={entry._id} value={categoryHref(entry.slug)}>
+                    {entry.name}
+                    {entry.isActive ? "" : " (hidden)"}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {orphanedHref && (
+              <optgroup label="Unavailable">
+                <option value={orphanedHref}>
+                  {categorySlugFromHref(orphanedHref)
+                    ? `Deleted category (${categorySlugFromHref(orphanedHref)})`
+                    : orphanedHref}
+                </option>
+              </optgroup>
+            )}
           </select>
+          {orphanedHref && (
+            <small>
+              This slide points at something that no longer exists. Pick a new
+              destination before saving.
+            </small>
+          )}
         </label>
         <label className="field">
           <span>Display order</span>

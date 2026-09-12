@@ -1,16 +1,25 @@
 import { z } from "zod";
 import { imageInput } from "@/validators/common";
-import { HERO_LINK_OPTIONS } from "@/lib/hero-links";
+import { isHeroLinkHref } from "@/lib/hero-links";
 
-const HERO_LINK_HREFS = HERO_LINK_OPTIONS.map((option) => option.href) as [
-  string,
-  ...string[],
-];
+/**
+ * Was `z.enum(HERO_LINK_OPTIONS)`. It cannot stay an enum now that slides may
+ * link to a category, because the valid set is rows in a collection rather
+ * than a constant — so this checks the *shape* (a known section, or a
+ * well-formed `/category/<slug>` path) and `heroSlide.service.ts` confirms the
+ * category actually exists. The schema alone would accept a slug for a
+ * category that was never created or has since been deleted.
+ */
+const heroHrefSchema = z
+  .string()
+  .trim()
+  .max(300)
+  .refine(isHeroLinkHref, { message: "Choose a destination from the list" });
 
 const heroCtaSchema = z
   .object({
     label: z.string().trim().min(1, "Give the button a label").max(40),
-    href: z.enum(HERO_LINK_HREFS, { message: "Choose a destination from the list" }),
+    href: heroHrefSchema,
   })
   .strict();
 
