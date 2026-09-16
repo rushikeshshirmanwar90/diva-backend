@@ -17,10 +17,11 @@ import type { OrderStatus } from "@/models/enums";
  *                     ┌──────────────────────────────────┐
  *                     ▼                                  │
  *   PENDING ──▶ PAYMENT_INITIATED ──▶ PAYMENT_FAILED ────┘ (retry)
- *                     │                     │
- *                     │                     └──────▶ ABANDONED (TTL sweep)
- *                     ▼
- *               PAYMENT_SUCCESS ──▶ CONFIRMED ──▶ SHIPMENT_CREATED
+ *      │              │                     │
+ *      │ (COD)        │                     └──────▶ ABANDONED (TTL sweep)
+ *      │              ▼
+ *      │        PAYMENT_SUCCESS ──▶ CONFIRMED ──▶ SHIPMENT_CREATED
+ *      └───────────────────────────────▲
  *                                       │                │
  *                                       │                ▼
  *                                       │            SHIPPED ──▶ OUT_FOR_DELIVERY ──▶ DELIVERED
@@ -32,7 +33,12 @@ import type { OrderStatus } from "@/models/enums";
  */
 
 const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  PENDING: ["PAYMENT_INITIATED", "CANCELLED", "ABANDONED"],
+  /**
+   * CONFIRMED directly from PENDING is the cash-on-delivery edge: there is no
+   * gateway leg, so the order is confirmed the moment it is placed and the
+   * money is collected by the courier at the door.
+   */
+  PENDING: ["PAYMENT_INITIATED", "CONFIRMED", "CANCELLED", "ABANDONED"],
 
   /** Retry is a loop back to itself: a customer may attempt payment repeatedly. */
   PAYMENT_INITIATED: ["PAYMENT_SUCCESS", "PAYMENT_FAILED", "PAYMENT_INITIATED", "ABANDONED"],

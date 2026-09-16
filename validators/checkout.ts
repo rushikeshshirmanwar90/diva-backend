@@ -19,6 +19,10 @@ import { ORDER_STATUSES } from "@/models/enums";
 // Orders
 // ---------------------------------------------------------------------------
 
+/** The subset of `PAYMENT_METHODS` a customer may pick for themselves. */
+export const CHECKOUT_PAYMENT_METHODS = ["PHONEPE", "COD"] as const;
+export type CheckoutPaymentMethod = (typeof CHECKOUT_PAYMENT_METHODS)[number];
+
 export const addressInput = z
   .object({
     fullName: z.string().trim().min(2).max(100),
@@ -61,6 +65,13 @@ export const createOrderSchema = z
 
     couponCode: z.string().trim().toUpperCase().max(30).optional(),
     giftNote: z.string().trim().max(200).optional(),
+
+    /**
+     * How the customer intends to pay. `MANUAL` is deliberately not offered —
+     * it exists for staff-recorded payments, not self-service checkout. COD
+     * eligibility (store switch, order-value cap) is enforced in the service.
+     */
+    paymentMethod: z.enum(CHECKOUT_PAYMENT_METHODS).default("PHONEPE"),
   })
   .strict()
   .refine((value) => Boolean(value.addressId ?? value.shippingAddress), {

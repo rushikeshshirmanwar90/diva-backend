@@ -45,6 +45,24 @@ export function invalidateSettingsCache(): void {
 }
 
 /**
+ * The cash-on-delivery policy, with defaults for a settings row written
+ * before the `cod` block existed.
+ *
+ * `getStoreSettings` reads with `.lean()`, which returns the stored document
+ * as-is — schema defaults are applied on insert, not on read — so an older
+ * row simply has no `cod` key. Without this, adding the feature would switch
+ * COD *off* on every existing deployment until someone re-saved settings.
+ */
+export function codPolicy(settings: Pick<SettingDocument, "cod">): SettingDocument["cod"] {
+  return settings.cod ?? COD_DEFAULTS;
+}
+
+export const COD_DEFAULTS: SettingDocument["cod"] = {
+  enabled: true,
+  maxOrderValuePaise: 5_000_000,
+};
+
+/**
  * Whether a pincode is on the manual block list.
  *
  * Distinct from Shiprocket serviceability: this is the shop's own decision —

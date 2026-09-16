@@ -3,11 +3,11 @@
   "info": {
     "title": "DIVA API",
     "version": "1.0.0",
-    "description": "REST API for the DIVA jewellery platform.\n\n**Money:** every amount is an integer count of paise. `129900` is ₹1,299.00.\n\n**Envelope:** every response is `{ success, data, meta? }` or\n`{ success: false, error: { code, message, details? } }`. Branch on `error.code`,\nnever on `error.message` — messages get reworded, codes do not.\n\n**Auth:** mobile sends `Authorization: Bearer`. Browsers use httpOnly cookies\nand must also send `X-CSRF-Token` on mutations."
+    "description": "REST API for the DIVA jewellery platform.\n\n**Money:** every amount is an integer count of paise. `129900` is ₹1,299.00.\n\n**Envelope:** every response is `{ success, status, message, data, meta? }` or\n`{ success: false, status, message, error: { code, message, details? } }`. Branch on\n`error.code`, never on `error.message` — messages get reworded, codes do not.\n\n**Auth:** mobile sends `Authorization: Bearer`. Browsers use httpOnly cookies\nand must also send `X-CSRF-Token` on mutations."
   },
   "servers": [
     {
-      "url": "http://localhost:4000/api/v1"
+      "url": "https://diva-backend.vercel.app/api/v1"
     }
   ],
   "tags": [
@@ -64,6 +64,12 @@
               false
             ]
           },
+          "status": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
           "error": {
             "type": "object",
             "properties": {
@@ -100,6 +106,8 @@
         },
         "required": [
           "success",
+          "status",
+          "message",
           "error"
         ]
       },
@@ -182,12 +190,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -255,12 +271,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -374,12 +398,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -488,12 +520,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -615,12 +655,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -733,12 +781,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -847,12 +903,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -965,12 +1029,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1092,12 +1164,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1194,12 +1274,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1322,12 +1410,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1680,6 +1776,12 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "type": "array",
                       "items": {
@@ -1704,6 +1806,8 @@
                   },
                   "required": [
                     "success",
+                    "status",
+                    "message",
                     "data",
                     "meta"
                   ]
@@ -1804,12 +1908,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1898,12 +2010,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1932,12 +2052,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -1966,12 +2094,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -2244,6 +2380,14 @@
                     "maxItems": 25,
                     "default": []
                   },
+                  "shippingReturns": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "careInstructions": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -2323,12 +2467,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -2663,6 +2815,16 @@
                     },
                     "maxItems": 25
                   },
+                  "shippingReturns": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 4000
+                  },
+                  "careInstructions": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 4000
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -2732,12 +2894,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -2867,12 +3037,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -3126,12 +3304,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -3392,12 +3578,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -3659,12 +3853,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -3929,12 +4131,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4031,12 +4241,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4156,12 +4374,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4284,12 +4510,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4533,6 +4767,14 @@
                   "giftNote": {
                     "type": "string",
                     "maxLength": 200
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "enum": [
+                      "PHONEPE",
+                      "COD"
+                    ],
+                    "default": "PHONEPE"
                   }
                 },
                 "required": [
@@ -4557,12 +4799,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4704,12 +4954,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4817,12 +5075,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -4946,12 +5212,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5059,12 +5333,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5180,6 +5462,12 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
@@ -5207,6 +5495,8 @@
                   },
                   "required": [
                     "success",
+                    "status",
+                    "message",
                     "data"
                   ]
                 }
@@ -5317,12 +5607,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5434,12 +5732,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5528,12 +5834,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5562,12 +5876,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5632,12 +5954,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }
@@ -5758,12 +6088,20 @@
                         true
                       ]
                     },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "nullable": true
                     }
                   },
                   "required": [
-                    "success"
+                    "success",
+                    "status",
+                    "message"
                   ]
                 }
               }

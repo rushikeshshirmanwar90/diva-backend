@@ -11,7 +11,6 @@ import * as products from "@/repositories/product.repository";
 import * as orderService from "@/services/order.service";
 import { notify } from "@/services/notification.service";
 import * as shippingService from "@/services/shipping.service";
-import { CouponModel, CouponRedemptionModel } from "@/models/Coupon";
 import type { OrderDocument } from "@/models/Order";
 import type { PaymentDocument } from "@/models/Payment";
 
@@ -71,6 +70,12 @@ export async function initiatePayment(
 
   const order = await orders.findOwnedByNumber(orderNumber, actor.userId);
   if (!order) throw ApiError.notFound("We could not find that order.");
+
+  if (order.paymentMethod === "COD") {
+    throw ApiError.conflict(
+      "This order is cash on delivery — there is nothing to pay online.",
+    );
+  }
 
   if (order.status !== "PENDING" && order.status !== "PAYMENT_FAILED") {
     throw ApiError.conflict(
@@ -419,7 +424,7 @@ async function settleFromGateway(
   if (!paid) return settled;
 
   await orderService.commitStockForOrder(order);
-  await redeemCoupon(order);
+  await orderService.redeemCoupon(order);
 
   const confirmed = await orders.transition(order._id, "CONFIRMED", "PAYMENT_SUCCESS", {
     note: "Order confirmed",
@@ -569,35 +574,6 @@ async function reReserveOrderStock(order: Pick<OrderDocument, "items">): Promise
     }
     throw error;
   }
-}
-
-/**
- * Consumes the coupon, now that the order is actually paid for.
- *
- * Counting a redemption at checkout would let anyone burn down a limited coupon
- * by starting orders they never pay for.
- */
-async function redeemCoupon(order: OrderDocument) {
-  if (!order.coupon?.code) return;
-
-  const coupon = await CouponModel.findOneAndUpdate(
-    { code: order.coupon.code },
-    { $inc: { usedCount: 1 } },
-    { returnDocument: "after" },
-  ).lean();
-
-  if (!coupon) return;
-
-  await CouponRedemptionModel.create({
-    couponId: coupon._id,
-    userId: order.userId,
-    orderId: order._id,
-    discountPaise: order.coupon.discountPaise,
-  }).catch((error) => {
-    // The unique index on (couponId, orderId) makes a repeat delivery a
-    // duplicate-key error, which is the correct outcome and not worth raising.
-    if ((error as { code?: number }).code !== 11000) throw error;
-  });
 }
 
 function view(payment: PaymentDocument, order: OrderDocument | null): PaymentView {

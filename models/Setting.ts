@@ -79,6 +79,18 @@ export interface SettingDocument {
     estimatedDaysMax: number;
   };
 
+  cod: {
+    /** Master switch. Off means the option is never offered at checkout. */
+    enabled: boolean;
+    /**
+     * Largest order value accepted on cash on delivery.
+     *
+     * A courier carrying a large cash sum for gold is a refusal risk and a
+     * safety risk; anything above this must be prepaid.
+     */
+    maxOrderValuePaise: number;
+  };
+
   pricing: {
     /**
      * Grace window during which a quoted price is honoured even if the metal
@@ -252,6 +264,12 @@ const settingSchema = new mongoose.Schema<SettingDocument>(
       blockedPincodePrefixes: { type: [String], default: [] },
       estimatedDaysMin: { type: Number, default: 3, min: 1 },
       estimatedDaysMax: { type: Number, default: 7, min: 1 },
+    },
+
+    /** Defaults mirrored in `lib/settings.ts#COD_DEFAULTS` for rows that predate this block. */
+    cod: {
+      enabled: { type: Boolean, default: true },
+      maxOrderValuePaise: paiseField({ default: 5_000_000 }),
     },
 
     pricing: {

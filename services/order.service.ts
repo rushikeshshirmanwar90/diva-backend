@@ -1,16 +1,18 @@
 import mongoose from "mongoose";
 import { ApiError } from "@/lib/api/errors";
 import { priceProduct, PricingError } from "@/lib/pricing/engine";
-import { getStoreSettings, isPincodeBlocked } from "@/lib/settings";
+import { codPolicy, getStoreSettings, isPincodeBlocked } from "@/lib/settings";
 import { distributePaise, formatPaise, percentOf } from "@/lib/money";
 import { assertTransition, CUSTOMER_CANCELLABLE } from "@/lib/orders/state-machine";
 import * as orders from "@/repositories/order.repository";
+import * as payments from "@/repositories/payment.repository";
 import * as products from "@/repositories/product.repository";
 import { notify } from "@/services/notification.service";
 import * as shippingService from "@/services/shipping.service";
 import { AddressModel } from "@/models/Address";
-import { CouponModel } from "@/models/Coupon";
+import { CouponModel, CouponRedemptionModel } from "@/models/Coupon";
 import type { OrderDocument } from "@/models/Order";
+import type { SettingDocument } from "@/models/Setting";
 import type { CreateOrderInput } from "@/validators/checkout";
 
 /**
@@ -28,6 +30,11 @@ import type { CreateOrderInput } from "@/validators/checkout";
  * The order that comes out of `createOrder` is a **snapshot**: title, image,
  * colour, size, unit price and the tax rate are all copied in. Nothing that
  * renders an order later follows `productId` back to the live catalogue.
+ *
+ * Two payment paths leave here. A prepaid order stops at PENDING with stock
+ * held, and `payment.service` carries it through the gateway. A cash-on-
+ * delivery order has no gateway leg, so `confirmCodOrder` walks it straight to
+ * CONFIRMED and files the shipment before the response is sent.
  */
 
 // ---------------------------------------------------------------------------
@@ -153,6 +160,15 @@ export async function createOrder(input: CreateOrderInput, actor: Actor) {
 
   const grandTotalPaise = taxableTotal + gstPaise + shippingPaise;
 
+  /**
+   * Checked against the *computed* total, after the coupon and shipping —
+   * the cap is about how much cash a courier carries, which is that number
+   * and nothing the client sent.
+   */
+  if (input.paymentMethod === "COD") {
+    assertCodAllowed(settings, grandTotalPaise);
+  }
+
   // --- Reserve stock, then write the order --------------------------------
 
   /**
@@ -209,7 +225,7 @@ export async function createOrder(input: CreateOrderInput, actor: Actor) {
       status: "PENDING",
       statusHistory: [{ status: "PENDING", at: new Date(), note: "Order created" }],
 
-      paymentMethod: "PHONEPE",
+      paymentMethod: input.paymentMethod,
 
       /**
        * The hold expires with the price lock. A customer who opens the PhonePe
@@ -231,6 +247,16 @@ export async function createOrder(input: CreateOrderInput, actor: Actor) {
       link: `/orders/${order.orderNumber}`,
       payload: { orderNumber: order.orderNumber },
     });
+
+    /**
+     * Outside the rollback above on purpose. Once the order row exists it owns
+     * the stock hold; if confirmation fails here the order stays PENDING and
+     * the reservation sweep releases the units — releasing them again in the
+     * catch block would double-count.
+     */
+    if (order.paymentMethod === "COD") {
+      return confirmCodOrder(order, actor);
+    }
 
     return order;
   } catch (error) {
@@ -321,6 +347,7 @@ export async function cancelOrder(orderNumber: string, userId: string, reason?: 
   }
 
   await releaseHeldStock(order);
+  if (order.paymentMethod === "COD") await payments.voidCod(order._id, "Cancelled by customer");
 
   void notify({
     userId,
@@ -367,6 +394,7 @@ export async function cancelOrderByStaff(orderNumber: string, staffId: string, r
   }
 
   await releaseHeldStock(order);
+  if (order.paymentMethod === "COD") await payments.voidCod(order._id, "Cancelled by staff");
 
   void notify({
     userId: String(order.userId),
@@ -410,6 +438,118 @@ export async function commitStockForOrder(order: Pick<OrderDocument, "items">) {
         }),
     ),
   );
+}
+
+/**
+ * Consumes the coupon, now that the order is actually committed to.
+ *
+ * Counting a redemption at checkout would let anyone burn down a limited
+ * coupon by starting orders they never pay for — so this runs on payment
+ * confirmation for prepaid orders and on placement for COD, where placing
+ * *is* the commitment.
+ */
+export async function redeemCoupon(order: OrderDocument) {
+  if (!order.coupon?.code) return;
+
+  const coupon = await CouponModel.findOneAndUpdate(
+    { code: order.coupon.code },
+    { $inc: { usedCount: 1 } },
+    { returnDocument: "after" },
+  ).lean();
+
+  if (!coupon) return;
+
+  await CouponRedemptionModel.create({
+    couponId: coupon._id,
+    userId: order.userId,
+    orderId: order._id,
+    discountPaise: order.coupon.discountPaise,
+  }).catch((error) => {
+    // The unique index on (couponId, orderId) makes a repeat delivery a
+    // duplicate-key error, which is the correct outcome and not worth raising.
+    if ((error as { code?: number }).code !== 11000) throw error;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cash on delivery
+// ---------------------------------------------------------------------------
+
+/**
+ * Rejects a COD request the store does not want to honour.
+ *
+ * A 400, not a 409: the order is well-formed but the store's policy says no,
+ * and the client's fix is to pick another method, not to reload.
+ */
+function assertCodAllowed(settings: SettingDocument, grandTotalPaise: number) {
+  const cod = codPolicy(settings);
+
+  if (!cod.enabled) {
+    throw ApiError.badRequest(
+      "Cash on delivery is not available right now. Please pay online instead.",
+    );
+  }
+
+  if (grandTotalPaise > cod.maxOrderValuePaise) {
+    throw ApiError.badRequest(
+      `Cash on delivery is available for orders up to ${formatPaise(cod.maxOrderValuePaise, { withDecimals: false })}. ` +
+        "Please pay online for this order.",
+    );
+  }
+}
+
+/**
+ * Walks a freshly-placed COD order from PENDING to CONFIRMED.
+ *
+ * Mirrors the happy path of `payment.service.settleFromGateway`, minus the
+ * gateway: a Payment row is filed so the finance screens have something to
+ * mark collected on delivery, stock goes from held to sold, the coupon is
+ * consumed, and a COD consignment is booked with the courier.
+ *
+ * Shipment creation is best-effort for the same reason it is on the prepaid
+ * path — Shiprocket being down must not fail the checkout. The order is left
+ * CONFIRMED, which is the queue an operator already works from.
+ */
+async function confirmCodOrder(order: OrderDocument, actor: Actor) {
+  const payment = await payments.create({
+    orderId: order._id,
+    userId: new mongoose.Types.ObjectId(actor.userId),
+    /**
+     * No gateway means no gateway reference, but the column is unique and
+     * required. The order number is unique too, and there is exactly one COD
+     * "attempt" per order, so it doubles as the reference.
+     */
+    merchantTransactionId: `COD-${order.orderNumber}`,
+    method: "COD",
+    status: "PENDING",
+    amountPaise: order.totals.grandTotalPaise,
+    initiatedAt: new Date(),
+  });
+
+  await orders.attachPayment(order._id, payment._id);
+
+  const confirmed = await orders.transition(order._id, "CONFIRMED", "PENDING", {
+    note: "Cash on delivery — confirmed without prepayment",
+    set: { reservationExpiresAt: null },
+  });
+
+  // Another writer got there first; whatever it did stands.
+  if (!confirmed) return order;
+
+  await commitStockForOrder(order);
+  await redeemCoupon(order);
+
+  try {
+    await shippingService.createShipmentForOrder(String(order._id));
+  } catch (error) {
+    console.error(
+      `[order] Shipment creation failed for COD order ${order.orderNumber}; order left CONFIRMED`,
+      error,
+    );
+    return confirmed;
+  }
+
+  return (await orders.findById(String(order._id))) ?? confirmed;
 }
 
 // ---------------------------------------------------------------------------

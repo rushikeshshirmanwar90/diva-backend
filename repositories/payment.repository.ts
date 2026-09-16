@@ -127,6 +127,9 @@ export async function findStale(options: { olderThanMinutes: number; limit?: num
   const cutoff = new Date(Date.now() - options.olderThanMinutes * 60_000);
 
   return PaymentModel.find({
+    // A COD row sits PENDING until the courier hands over the cash; there is
+    // no gateway to ask about it, and asking PhonePe would only error.
+    method: "PHONEPE",
     status: { $in: ["INITIATED", "PENDING"] },
     initiatedAt: { $lt: cutoff },
     // Give up after a day of asking; by then it is an operator's problem, and
@@ -136,6 +139,45 @@ export async function findStale(options: { olderThanMinutes: number; limit?: num
     .sort({ initiatedAt: 1 })
     .limit(options.limit ?? 50)
     .lean();
+}
+
+/**
+ * Records that the courier handed over the cash for a COD order.
+ *
+ * Filtered on `method` and a non-final status so a repeated delivery scan is
+ * a no-op rather than a second SUCCESS.
+ */
+export async function markCodCollected(orderId: string | Types.ObjectId) {
+  return PaymentModel.findOneAndUpdate(
+    { orderId, method: "COD", status: { $in: ["INITIATED", "PENDING"] } },
+    // Pipeline form so the confirmed amount can be copied from the row itself:
+    // what was collected is what was asked for, and the finance screens read
+    // `confirmedAmountPaise` to say so.
+    [
+      {
+        $set: {
+          status: "SUCCESS",
+          confirmedAmountPaise: "$amountPaise",
+          paymentInstrument: "CASH_ON_DELIVERY",
+          completedAt: new Date(),
+        },
+      },
+    ],
+    { returnDocument: "after" },
+  ).lean();
+}
+
+/**
+ * Closes the COD row for an order that was cancelled before the courier
+ * collected anything. FAILED rather than a new status: nothing was received,
+ * and the finance screens already know how to read FAILED.
+ */
+export async function voidCod(orderId: string | Types.ObjectId, reason: string) {
+  return PaymentModel.findOneAndUpdate(
+    { orderId, method: "COD", status: { $in: ["INITIATED", "PENDING"] } },
+    { $set: { status: "FAILED", failureMessage: reason, completedAt: new Date() } },
+    { returnDocument: "after" },
+  ).lean();
 }
 
 /** Payments where the gateway confirmed an amount we did not expect. */

@@ -1,8 +1,10 @@
 import { ApiError } from "@/lib/api/errors";
-import { getStoreSettings, isPincodeBlocked } from "@/lib/settings";
+import { codPolicy, getStoreSettings, isPincodeBlocked } from "@/lib/settings";
 import { shiprocketConfig } from "@/config/env";
 import * as shiprocket from "@/lib/shipping/shiprocket";
+import { formatPaise } from "@/lib/money";
 import * as orders from "@/repositories/order.repository";
+import * as payments from "@/repositories/payment.repository";
 import * as shipments from "@/repositories/shipment.repository";
 import { shouldApplyTransition } from "@/lib/orders/state-machine";
 import type { OrderStatus } from "@/models/enums";
@@ -29,6 +31,14 @@ export type ServiceabilityResult = {
   shippingChargePaise: number;
   estimatedDays: { min: number; max: number } | null;
   courierName: string | null;
+  /**
+   * Whether cash on delivery may be offered for this cart. Store policy only
+   * (the switch and the value cap) — the courier's own COD coverage is
+   * settled when the consignment is booked, not quoted here.
+   */
+  codAvailable: boolean;
+  /** Why `codAvailable` is false, phrased for the customer. */
+  codUnavailableReason?: string;
   reason?: string;
 };
 
@@ -53,6 +63,8 @@ export async function checkServiceability(input: {
       ? 0
       : settings.shipping.flatRatePaise;
 
+  const cod = codAvailability(settings, input.cartValuePaise);
+
   if (isPincodeBlocked(input.pincode, settings.shipping.blockedPincodePrefixes)) {
     return {
       serviceable: false,
@@ -60,6 +72,7 @@ export async function checkServiceability(input: {
       shippingChargePaise,
       estimatedDays: null,
       courierName: null,
+      ...cod,
       reason: "We are not currently delivering to this pincode.",
     };
   }
@@ -93,6 +106,7 @@ export async function checkServiceability(input: {
       shippingChargePaise,
       estimatedDays: null,
       courierName: null,
+      ...cod,
       reason: "No courier currently delivers insured jewellery to this pincode.",
     };
   }
@@ -110,7 +124,33 @@ export async function checkServiceability(input: {
           max: settings.shipping.estimatedDaysMax,
         },
     courierName: quote?.cheapest?.courierName ?? null,
+    ...cod,
   };
+}
+
+/**
+ * The same policy `order.service` enforces at placement, phrased for the
+ * checkout screen so the option can be greyed out with a reason rather than
+ * rejected after the customer picks it.
+ */
+function codAvailability(
+  settings: Awaited<ReturnType<typeof getStoreSettings>>,
+  cartValuePaise: number,
+): Pick<ServiceabilityResult, "codAvailable" | "codUnavailableReason"> {
+  const cod = codPolicy(settings);
+
+  if (!cod.enabled) {
+    return { codAvailable: false, codUnavailableReason: "Cash on delivery is not available right now." };
+  }
+
+  if (cartValuePaise > cod.maxOrderValuePaise) {
+    return {
+      codAvailable: false,
+      codUnavailableReason: `Cash on delivery is available for orders up to ${formatPaise(cod.maxOrderValuePaise, { withDecimals: false })}.`,
+    };
+  }
+
+  return { codAvailable: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +207,7 @@ export async function createShipmentForOrder(orderId: string) {
     subtotalPaise: order.totals.subtotalPaise,
     shippingChargePaise: order.totals.shippingPaise,
     discountPaise: order.totals.discountPaise,
-    paymentMethod: "Prepaid",
+    paymentMethod: order.paymentMethod === "COD" ? "COD" : "Prepaid",
     weightKg: parcelWeightKg(order.items),
   });
 
@@ -368,10 +408,22 @@ export async function handleTrackingWebhook(input: {
     return { handled: true, reason: `${order.status} → ${orderStatus} not applicable` };
   }
 
-  await orders.transition(order._id, orderStatus, order.status, {
+  const moved = await orders.transition(order._id, orderStatus, order.status, {
     note: `Courier update: ${courierStatus}`,
-    set: orderStatus === "DELIVERED" ? { deliveredAt: new Date() } : {},
+    set:
+      orderStatus === "DELIVERED"
+        ? { deliveredAt: new Date(), ...(order.paymentMethod === "COD" ? { paidAt: new Date() } : {}) }
+        : {},
   });
+
+  /**
+   * For cash on delivery, the doorstep handover *is* the payment. The Payment
+   * row is flipped to SUCCESS here so finance reporting counts the money on
+   * the day it was collected, not the day the order was placed.
+   */
+  if (moved && orderStatus === "DELIVERED" && order.paymentMethod === "COD") {
+    await payments.markCodCollected(order._id);
+  }
 
   return { handled: true };
 }

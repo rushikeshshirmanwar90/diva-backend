@@ -17,6 +17,21 @@ field or a new enum member is not breaking.
 
 ## Unreleased
 
+### 2026-09-17 — Cash on delivery
+
+Additive. No existing contracts broken.
+
+Orders (`POST /orders`):
+- **Added** optional `paymentMethod` request field: `"PHONEPE"` (default) or `"COD"`. A COD order is returned already `CONFIRMED` (with a shipment booked when the courier is reachable) — there is no `/payments/phonepe/initiate` leg, and calling it for a COD order answers 409.
+- **Added** `PENDING → CONFIRMED` as a legal order transition (COD only).
+- COD is refused with 400 when the store switch is off or the computed total exceeds `settings.cod.maxOrderValuePaise` (default ₹50,000).
+
+Shipping (`GET /shipping/serviceability`):
+- **Added** `codAvailable` (boolean) and `codUnavailableReason` (string, only when false) to the response so the checkout can grey the option out with the reason instead of failing after the customer picks it.
+
+Payments:
+- A COD order carries a `Payment` row with `method: "COD"`, `status: "PENDING"` and `merchantTransactionId: "COD-<orderNumber>"`. It flips to `SUCCESS` (with `paymentInstrument: "CASH_ON_DELIVERY"`) when the courier reports delivery. The PhonePe reconciliation sweep ignores these rows.
+
 ### 2026-09-02 — Help footer navigation, dynamic store settings, and policy management
 
 Additive. No existing contracts broken.
