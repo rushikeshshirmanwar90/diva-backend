@@ -3,137 +3,58 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpRight,
   Check,
+  ExternalLink,
   Loader2,
   Plus,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { useAsyncData } from "@/app/admin/_lib/use-async-data";
 import {
   api,
   AdminApiError,
-  type FaqGroup,
-  type StoreAssurance,
-  type StoreLocation,
+  type HelpCard,
+  type HelpLink,
   type StoreSettings,
 } from "@/app/admin/_lib/api";
 import { EditorSkeleton, ErrorDialog, ErrorRow, PageHeading } from "@/app/admin/_components/ui";
 import { useErrorDialog } from "@/app/admin/_lib/use-error-dialog";
 import { useToast } from "@/app/admin/_components/shell";
 
-const DEFAULT_ASSURANCES: StoreAssurance[] = [
+/** Mirrors the schema default in `models/Setting.ts`, for "Restore defaults". */
+const DEFAULT_HELP_LINKS: HelpLink[] = [
+  { label: "FAQ", href: "/faq", isActive: true, openInNewTab: false },
+  { label: "Shipping", href: "/policies/shipping", isActive: true, openInNewTab: false },
+  { label: "Returns & exchange", href: "/policies/returns", isActive: true, openInNewTab: false },
+  { label: "Privacy policy", href: "/policies/privacy", isActive: true, openInNewTab: false },
+  { label: "Terms of service", href: "/policies/terms", isActive: true, openInNewTab: false },
+  { label: "My account", href: "/account", isActive: true, openInNewTab: false },
+];
+
+/** Mirrors `DEFAULT_HELP_CARDS` in `models/Setting.ts`. */
+const DEFAULT_HELP_CARDS: HelpCard[] = [
   {
-    title: "BIS hallmarked",
-    body: "HUID on every gold piece, verifiable in the BIS Care app.",
-    icon: "BadgeCheck",
+    title: "Track an order",
+    body: "See where your order is, download invoices and request a return from your account.",
+    href: "/account/orders",
+    cta: "My orders",
   },
   {
-    title: "Insured delivery",
-    body: "Fully insured and tracked until it is signed for.",
-    icon: "Truck",
-  },
-  {
-    title: "15-day returns",
-    body: "Plus one free size exchange within 30 days.",
-    icon: "RotateCcw",
-  },
-  {
-    title: "Lifetime care",
-    body: "Free cleaning, polishing and re-rhodium plating.",
-    icon: "ShieldCheck",
+    title: "Planning a wedding?",
+    body: "Bridal orders take 6–8 weeks. Here is the timeline we recommend.",
+    href: "/blog/bridal-timeline-eight-weeks",
+    cta: "Read the guide",
   },
 ];
 
-const DEFAULT_STORES: StoreLocation[] = [
-  {
-    city: "Bengaluru",
-    tag: "Flagship",
-    address: "12 Lavelle Road, Bengaluru 560001",
-    phone: "+91 95798 96842",
-    hours: "Mon–Sat 10:30–20:00 · Sun 11:00–18:00",
-    note: "Bridal appointments and purity assays available here.",
-  },
-  {
-    city: "Chennai",
-    tag: "Counter",
-    address: "48 Nungambakkam High Road, Chennai 600034",
-    phone: "+91 95798 96842",
-    hours: "Mon–Sat 10:30–20:00 · Sun closed",
-    note: "Temple and 22K collections held in depth.",
-  },
-  {
-    city: "Hyderabad",
-    tag: "Counter",
-    address: "9 Road No. 12, Banjara Hills, Hyderabad 500034",
-    phone: "+91 95798 96842",
-    hours: "Tue–Sun 11:00–20:00 · Mon closed",
-    note: "Polki and diamond bridal, by appointment on weekends.",
-  },
-];
-
-const DEFAULT_FAQS: FaqGroup[] = [
-  {
-    group: "Orders & Delivery",
-    items: [
-      {
-        q: "How long does delivery take?",
-        a: "In-stock pieces ship within 48 hours and reach most Indian metros in 2–4 working days, insured and fully tracked. Made-to-order and bridal pieces take 6–8 weeks from design freeze.",
-      },
-      {
-        q: "Is shipping insured?",
-        a: "Yes. Every shipment is insured for its full declared value until it is signed for. We ship only through Bluedart and Delhivery secure-jewellery services.",
-      },
-      {
-        q: "Do you ship outside India?",
-        a: "Not yet. We are working through customs and hallmarking requirements for the UAE, UK and Singapore.",
-      },
-    ],
-  },
-  {
-    group: "Pricing & Payment",
-    items: [
-      {
-        q: "What does the price include?",
-        a: "Metal value at today's rate, making charges, stone value where applicable, and 3% GST. Every product page breaks this down line by line.",
-      },
-      {
-        q: "Which payment methods do you accept?",
-        a: "UPI, all major credit and debit cards, net banking and no-cost EMI on orders above ₹25,000, all through PhonePe's secure gateway.",
-      },
-    ],
-  },
-  {
-    group: "Returns, Exchange & Buyback",
-    items: [
-      {
-        q: "What is the return window?",
-        a: "15 days from delivery on all in-stock pieces, provided the hallmark tag is unbroken. Refunds are credited to the original payment method within 5 working days.",
-      },
-      {
-        q: "Can I exchange for a different size?",
-        a: "Once, free, within 30 days — including two-way courier on rings, bangles and bracelets.",
-      },
-      {
-        q: "Do you buy back old gold?",
-        a: "Yes, at 100% of current metal value for pieces bought from us, and 92% for pieces bought elsewhere, after an in-person purity assay.",
-      },
-    ],
-  },
-  {
-    group: "Authenticity & Care",
-    items: [
-      {
-        q: "Is everything hallmarked?",
-        a: "Every gold piece carries a BIS hallmark and a six-digit HUID you can verify yourself in the BIS Care app. Diamond pieces above 0.30ct ship with an IGI or GIA certificate.",
-      },
-      {
-        q: "Do you offer cleaning and polishing?",
-        a: "Free ultrasonic cleaning and re-polishing for life at any Diva counter. Polki and pearl pieces are cleaned by hand.",
-      },
-    ],
-  },
-];
+/** Same rule as the backend validator: a storefront path, or a full http(s) URL. */
+function isValidHref(value: string): boolean {
+  return /^\/(?!\/)[^\s]*$/.test(value) || /^https?:\/\/[^\s]+$/i.test(value);
+}
 
 type Draft = {
   storeName: string;
@@ -154,12 +75,11 @@ type Draft = {
   footerBlurb: string;
   copyrightText: string;
   paymentMethodsNote: string;
-  assurances: StoreAssurance[];
-  contactEyebrow: string;
-  contactTitle: string;
-  contactDescription: string;
-  stores: StoreLocation[];
-  faqs: FaqGroup[];
+  helpLinks: HelpLink[];
+  helpEyebrow: string;
+  helpTitle: string;
+  helpDescription: string;
+  helpCards: HelpCard[];
 };
 
 function toDraft(settings: StoreSettings): Draft {
@@ -189,18 +109,24 @@ function toDraft(settings: StoreSettings): Draft {
       settings.copyrightText || "© 2026 Diva The Indian Jewel · GSTIN 29AABCD1234E1ZQ",
     paymentMethodsNote:
       settings.paymentMethodsNote || "UPI · Cards · Net banking · No-cost EMI",
-    assurances: settings.assurances?.length ? settings.assurances : DEFAULT_ASSURANCES,
-    contactEyebrow: settings.contactPage?.eyebrow || "We answer in under four hours",
-    contactTitle: settings.contactPage?.title || "Talk to a person",
-    contactDescription:
-      settings.contactPage?.description ||
-      "No chatbots. Messages reach the same team that handles the counters, and bridal enquiries go straight to a senior consultant.",
-    stores: settings.contactPage?.stores?.length ? settings.contactPage.stores : DEFAULT_STORES,
-    faqs: settings.faqs?.length ? settings.faqs : DEFAULT_FAQS,
+    helpLinks: settings.helpLinks?.length
+      ? settings.helpLinks.map((link) => ({
+          label: link.label,
+          href: link.href,
+          isActive: link.isActive ?? true,
+          openInNewTab: link.openInNewTab ?? false,
+        }))
+      : DEFAULT_HELP_LINKS,
+    helpEyebrow: settings.helpPage?.eyebrow || "Help centre",
+    helpTitle: settings.helpPage?.title || "Questions, answered plainly",
+    helpDescription:
+      settings.helpPage?.description ||
+      "If your question is not here, WhatsApp us — a person replies, usually within ten minutes.",
+    helpCards: settings.helpPage?.cards ?? DEFAULT_HELP_CARDS,
   };
 }
 
-type TabKey = "general" | "footer" | "contact" | "faq" | "policies";
+type TabKey = "general" | "footer" | "links" | "faq" | "policies";
 
 export default function SettingsPage() {
   const { notify } = useToast();
@@ -253,6 +179,36 @@ export default function SettingsPage() {
       return setFormError("Fill in the full address.");
     }
 
+    const links = draft.helpLinks.map((link) => ({
+      label: link.label.trim(),
+      href: link.href.trim(),
+      isActive: link.isActive,
+      openInNewTab: link.openInNewTab,
+    }));
+    const badLink = links.findIndex((link) => !link.label || !isValidHref(link.href));
+    if (badLink !== -1) {
+      setActiveTab("links");
+      return setFormError(
+        `Help link #${badLink + 1} needs a label and a destination — a storefront path like /faq or a full https:// address.`,
+      );
+    }
+
+    const cards = draft.helpCards.map((card) => ({
+      title: card.title.trim(),
+      body: card.body.trim(),
+      href: card.href.trim(),
+      cta: card.cta.trim(),
+    }));
+    const badCard = cards.findIndex(
+      (card) => !card.title || !card.body || !card.cta || !isValidHref(card.href),
+    );
+    if (badCard !== -1) {
+      setActiveTab("faq");
+      return setFormError(
+        `Help card #${badCard + 1} needs a title, description, button label and a valid destination.`,
+      );
+    }
+
     setSaving(true);
     setFormError("");
 
@@ -280,31 +236,13 @@ export default function SettingsPage() {
         footerBlurb: draft.footerBlurb.trim() || undefined,
         copyrightText: draft.copyrightText.trim() || undefined,
         paymentMethodsNote: draft.paymentMethodsNote.trim() || undefined,
-        assurances: draft.assurances.map((a) => ({
-          title: a.title.trim(),
-          body: a.body.trim(),
-          icon: a.icon?.trim() || undefined,
-        })),
-        contactPage: {
-          eyebrow: draft.contactEyebrow.trim() || undefined,
-          title: draft.contactTitle.trim() || undefined,
-          description: draft.contactDescription.trim() || undefined,
-          stores: draft.stores.map((s) => ({
-            city: s.city.trim(),
-            tag: s.tag?.trim() || "Counter",
-            address: s.address.trim(),
-            phone: s.phone.trim(),
-            hours: s.hours.trim(),
-            note: s.note?.trim() || undefined,
-          })),
+        helpLinks: links,
+        helpPage: {
+          eyebrow: draft.helpEyebrow.trim() || undefined,
+          title: draft.helpTitle.trim() || undefined,
+          description: draft.helpDescription.trim() || undefined,
+          cards,
         },
-        faqs: draft.faqs.map((group) => ({
-          group: group.group.trim(),
-          items: group.items.map((i) => ({
-            q: i.q.trim(),
-            a: i.a.trim(),
-          })),
-        })),
       });
       notify("Settings saved successfully");
       await reload();
@@ -317,172 +255,64 @@ export default function SettingsPage() {
     }
   };
 
-  // --- Assurance Helpers ----------------------------------------------------
-  const updateAssurance = (index: number, patch: Partial<StoreAssurance>) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const assurances = current.assurances.map((a, i) =>
-        i === index ? { ...a, ...patch } : a,
-      );
-      return { ...current, assurances };
+  // --- Help Link Helpers ----------------------------------------------------
+  const setHelpLinks = (mutate: (links: HelpLink[]) => HelpLink[]) => {
+    setDraft((current) => (current ? { ...current, helpLinks: mutate(current.helpLinks) } : current));
+  };
+
+  const updateHelpLink = (index: number, patch: Partial<HelpLink>) =>
+    setHelpLinks((links) => links.map((link, i) => (i === index ? { ...link, ...patch } : link)));
+
+  const addHelpLink = () =>
+    setHelpLinks((links) => [...links, { label: "", href: "/", isActive: true, openInNewTab: false }]);
+
+  const removeHelpLink = (index: number) =>
+    setHelpLinks((links) => links.filter((_, i) => i !== index));
+
+  /** Swaps with a neighbour. Order in the array is the order in the footer. */
+  const moveHelpLink = (index: number, direction: -1 | 1) =>
+    setHelpLinks((links) => {
+      const target = index + direction;
+      if (target < 0 || target >= links.length) return links;
+      const next = [...links];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
     });
+
+  const restoreDefaultHelpLinks = () => {
+    if (!window.confirm("Replace the current help links with the store defaults?")) return;
+    setHelpLinks(() => DEFAULT_HELP_LINKS.map((link) => ({ ...link })));
   };
 
-  const addAssurance = () => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            assurances: [
-              ...current.assurances,
-              { title: "New guarantee", body: "Description of guarantee", icon: "ShieldCheck" },
-            ],
-          }
-        : current,
-    );
+  // --- Help Card Helpers ----------------------------------------------------
+  const setHelpCards = (mutate: (cards: HelpCard[]) => HelpCard[]) => {
+    setDraft((current) => (current ? { ...current, helpCards: mutate(current.helpCards) } : current));
   };
 
-  const removeAssurance = (index: number) => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            assurances: current.assurances.filter((_, i) => i !== index),
-          }
-        : current,
-    );
-  };
+  const updateHelpCard = (index: number, patch: Partial<HelpCard>) =>
+    setHelpCards((cards) => cards.map((card, i) => (i === index ? { ...card, ...patch } : card)));
 
-  // --- Store Location Helpers -----------------------------------------------
-  const updateStore = (index: number, patch: Partial<StoreLocation>) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const stores = current.stores.map((s, i) => (i === index ? { ...s, ...patch } : s));
-      return { ...current, stores };
+  const addHelpCard = () =>
+    setHelpCards((cards) => [...cards, { title: "", body: "", href: "/faq", cta: "Learn more" }]);
+
+  const removeHelpCard = (index: number) =>
+    setHelpCards((cards) => cards.filter((_, i) => i !== index));
+
+  const moveHelpCard = (index: number, direction: -1 | 1) =>
+    setHelpCards((cards) => {
+      const target = index + direction;
+      if (target < 0 || target >= cards.length) return cards;
+      const next = [...cards];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
     });
-  };
-
-  const addStore = () => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            stores: [
-              ...current.stores,
-              {
-                city: "New city",
-                tag: "Counter",
-                address: "Store address line",
-                phone: current.supportPhone || "+91 95798 96842",
-                hours: "Mon–Sat 10:30–20:00",
-                note: "",
-              },
-            ],
-          }
-        : current,
-    );
-  };
-
-  const removeStore = (index: number) => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            stores: current.stores.filter((_, i) => i !== index),
-          }
-        : current,
-    );
-  };
-
-  // --- FAQ Helpers ----------------------------------------------------------
-  const updateFaqGroupTitle = (groupIndex: number, group: string) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const faqs = current.faqs.map((g, i) => (i === groupIndex ? { ...g, group } : g));
-      return { ...current, faqs };
-    });
-  };
-
-  const addFaqGroup = () => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            faqs: [
-              ...current.faqs,
-              {
-                group: "New FAQ Category",
-                items: [{ q: "Sample question?", a: "Sample answer." }],
-              },
-            ],
-          }
-        : current,
-    );
-  };
-
-  const removeFaqGroup = (groupIndex: number) => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            faqs: current.faqs.filter((_, i) => i !== groupIndex),
-          }
-        : current,
-    );
-  };
-
-  const updateFaqItem = (
-    groupIndex: number,
-    itemIndex: number,
-    patch: { q?: string; a?: string },
-  ) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const faqs = current.faqs.map((g, gi) => {
-        if (gi !== groupIndex) return g;
-        const items = g.items.map((item, ii) =>
-          ii === itemIndex ? { ...item, ...patch } : item,
-        );
-        return { ...g, items };
-      });
-      return { ...current, faqs };
-    });
-  };
-
-  const addFaqItem = (groupIndex: number) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const faqs = current.faqs.map((g, gi) => {
-        if (gi !== groupIndex) return g;
-        return {
-          ...g,
-          items: [...g.items, { q: "New Question?", a: "Detailed answer." }],
-        };
-      });
-      return { ...current, faqs };
-    });
-  };
-
-  const removeFaqItem = (groupIndex: number, itemIndex: number) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const faqs = current.faqs.map((g, gi) => {
-        if (gi !== groupIndex) return g;
-        return {
-          ...g,
-          items: g.items.filter((_, ii) => ii !== itemIndex),
-        };
-      });
-      return { ...current, faqs };
-    });
-  };
 
   return (
     <>
       <PageHeading
         eyebrow="Storefront"
         title="Settings & Help Navigation"
-        description="Configure contact info, footer branding, assurances, physical stores, FAQ, and policy pages."
+        description="Contact details, footer copy, help links, the help page and policy pages."
       />
 
       {(formError || loadError) && (
@@ -500,9 +330,9 @@ export default function SettingsPage() {
           <div className="tab-nav" style={{ display: "flex", gap: "8px", marginBottom: "20px", borderBottom: "1px solid var(--line, #e5e5e5)", paddingBottom: "8px", overflowX: "auto" }}>
             {[
               { id: "general" as const, label: "Store & Contact" },
-              { id: "footer" as const, label: "Footer & Assurances" },
-              { id: "contact" as const, label: "Contact & Stores Page" },
-              { id: "faq" as const, label: "Help & FAQ Content" },
+              { id: "footer" as const, label: "Footer" },
+              { id: "links" as const, label: "Help Links" },
+              { id: "faq" as const, label: "Help Page" },
               { id: "policies" as const, label: "Policy Pages" },
             ].map((tab) => (
               <button
@@ -622,7 +452,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Tab 2: Footer & Assurances */}
+            {/* Tab 2: Footer */}
             {activeTab === "footer" && (
               <div className="variant-card">
                 <h3 style={{ marginBottom: 14 }}>Footer Brand Copy & Legal</h3>
@@ -651,366 +481,345 @@ export default function SettingsPage() {
                   </label>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    margin: "32px 0 14px",
-                  }}
-                >
-                  <div>
-                    <h3 style={{ margin: 0 }}>Footer Assurance Badges</h3>
-                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--muted, #666)" }}>
-                      The 4 guarantee cards shown across the top of the footer.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={addAssurance}
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    <Plus size={14} /> Add Badge
-                  </button>
-                </div>
-
-                <div style={{ display: "grid", gap: 16 }}>
-                  {draft.assurances.map((assurance, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        border: "1px solid var(--line, #e5e5e5)",
-                        padding: "16px",
-                        borderRadius: "6px",
-                        position: "relative",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 10,
-                        }}
-                      >
-                        <strong style={{ fontSize: "13px" }}>Badge #{index + 1}</strong>
-                        {draft.assurances.length > 1 && (
-                          <button
-                            type="button"
-                            className="icon-button"
-                            onClick={() => removeAssurance(index)}
-                            title="Remove badge"
-                            style={{ color: "#ef4444" }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="field-grid">
-                        <label className="field">
-                          <span>Title</span>
-                          <input
-                            value={assurance.title}
-                            onChange={(e) => updateAssurance(index, { title: e.target.value })}
-                            placeholder="e.g. BIS hallmarked"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Description</span>
-                          <input
-                            value={assurance.body}
-                            onChange={(e) => updateAssurance(index, { body: e.target.value })}
-                            placeholder="e.g. HUID on every gold piece"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
-            {/* Tab 3: Contact & Stores Page */}
-            {activeTab === "contact" && (
+            {/* Tab: Help links (footer "Help" column) */}
+            {activeTab === "links" && (
               <div className="variant-card">
-                <h3 style={{ marginBottom: 14 }}>Contact Page Header</h3>
-                <div className="field-grid">
-                  <label className="field">
-                    <span>Eyebrow tag</span>
-                    <input
-                      {...field("contactEyebrow")}
-                      placeholder="We answer in under four hours"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Page Title</span>
-                    <input {...field("contactTitle")} placeholder="Talk to a person" />
-                  </label>
-                  <label className="field field-wide">
-                    <span>Description blurb</span>
-                    <textarea
-                      {...field("contactDescription")}
-                      rows={2}
-                      placeholder="Introductory text on the /contact page."
-                    />
-                  </label>
-                </div>
-
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    margin: "32px 0 14px",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    marginBottom: 14,
                   }}
                 >
                   <div>
-                    <h3 style={{ margin: 0 }}>Physical Store Counters</h3>
+                    <h3 style={{ margin: 0 }}>Footer Help Links</h3>
                     <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--muted, #666)" }}>
-                      Locations listed on the /contact page.
+                      The links under &ldquo;Help&rdquo; in the storefront footer, top to bottom.
+                      Use a storefront path like <code>/faq</code> or a full <code>https://</code> address.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={addStore}
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    <Plus size={14} /> Add Store Location
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={restoreDefaultHelpLinks}
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <RotateCcw size={14} /> Restore defaults
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={addHelpLink}
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <Plus size={14} /> Add Link
+                    </button>
+                  </div>
                 </div>
 
-                <div style={{ display: "grid", gap: 16 }}>
-                  {draft.stores.map((store, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        border: "1px solid var(--line, #e5e5e5)",
-                        padding: "16px",
-                        borderRadius: "6px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 10,
-                        }}
-                      >
-                        <strong style={{ fontSize: "13px" }}>
-                          {store.city || `Store #${index + 1}`} ({store.tag})
-                        </strong>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          onClick={() => removeStore(index)}
-                          title="Remove store"
-                          style={{ color: "#ef4444" }}
+                {draft.helpLinks.length === 0 ? (
+                  <div className="state-row">
+                    No links. The footer&rsquo;s Help column will be empty until you add one.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {draft.helpLinks.map((link, index) => {
+                      const external = /^https?:\/\//i.test(link.href);
+                      const hrefOk = isValidHref(link.href.trim());
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            border: "1px solid var(--line, #e5e5e5)",
+                            borderRadius: 6,
+                            padding: 14,
+                            opacity: link.isActive ? 1 : 0.65,
+                          }}
                         >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                      <div className="field-grid">
-                        <label className="field">
-                          <span>City</span>
-                          <input
-                            value={store.city}
-                            onChange={(e) => updateStore(index, { city: e.target.value })}
-                            placeholder="e.g. Bengaluru"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Tag / Store Type</span>
-                          <input
-                            value={store.tag}
-                            onChange={(e) => updateStore(index, { tag: e.target.value })}
-                            placeholder="Flagship, Counter, Atelier..."
-                          />
-                        </label>
-                        <label className="field field-wide">
-                          <span>Address</span>
-                          <input
-                            value={store.address}
-                            onChange={(e) => updateStore(index, { address: e.target.value })}
-                            placeholder="Full store address"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Phone</span>
-                          <input
-                            value={store.phone}
-                            onChange={(e) => updateStore(index, { phone: e.target.value })}
-                            placeholder="+91 95798 96842"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Opening Hours</span>
-                          <input
-                            value={store.hours}
-                            onChange={(e) => updateStore(index, { hours: e.target.value })}
-                            placeholder="Mon–Sat 10:30–20:00 · Sun 11:00–18:00"
-                          />
-                        </label>
-                        <label className="field field-wide">
-                          <span>Note / Specialties</span>
-                          <input
-                            value={store.note || ""}
-                            onChange={(e) => updateStore(index, { note: e.target.value })}
-                            placeholder="e.g. Bridal appointments and purity assays available here."
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              marginBottom: 10,
+                            }}
+                          >
+                            <strong style={{ fontSize: 13 }}>Link #{index + 1}</strong>
+                            {external && (
+                              <span
+                                className="method-pill"
+                                title="Opens an address outside the storefront"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                              >
+                                <ExternalLink size={10} /> External
+                              </span>
+                            )}
+                            {!link.isActive && <span className="method-pill">Hidden</span>}
+                            <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => moveHelpLink(index, -1)}
+                                disabled={index === 0}
+                                title="Move up"
+                                aria-label={`Move link ${index + 1} up`}
+                              >
+                                <ArrowUp size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => moveHelpLink(index, 1)}
+                                disabled={index === draft.helpLinks.length - 1}
+                                title="Move down"
+                                aria-label={`Move link ${index + 1} down`}
+                              >
+                                <ArrowDown size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => removeHelpLink(index)}
+                                title="Remove link"
+                                aria-label={`Remove link ${index + 1}`}
+                                style={{ color: "#ef4444" }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="field-grid">
+                            <label className="field">
+                              <span>
+                                Label <b>*</b>
+                              </span>
+                              <input
+                                value={link.label}
+                                onChange={(e) => updateHelpLink(index, { label: e.target.value })}
+                                placeholder="e.g. Size guide"
+                                maxLength={60}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>
+                                Destination <b>*</b>
+                              </span>
+                              <input
+                                value={link.href}
+                                onChange={(e) => updateHelpLink(index, { href: e.target.value })}
+                                placeholder="/faq or https://…"
+                                style={hrefOk ? undefined : { borderColor: "#ef4444" }}
+                              />
+                              {!hrefOk && (
+                                <small style={{ color: "#ef4444" }}>
+                                  Must start with / or https://
+                                </small>
+                              )}
+                            </label>
+                          </div>
+
+                          <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
+                            <label className="check-row" style={{ marginTop: 10 }}>
+                              <input
+                                type="checkbox"
+                                checked={link.isActive}
+                                onChange={(e) => updateHelpLink(index, { isActive: e.target.checked })}
+                              />
+                              <span>
+                                <strong>Show in footer</strong>
+                              </span>
+                            </label>
+                            <label className="check-row" style={{ marginTop: 10 }}>
+                              <input
+                                type="checkbox"
+                                checked={link.openInNewTab}
+                                onChange={(e) =>
+                                  updateHelpLink(index, { openInNewTab: e.target.checked })
+                                }
+                              />
+                              <span>
+                                <strong>Open in a new tab</strong>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Tab 4: Help & FAQ Content */}
+            {/* Tab 4: Help page (header + cards; questions live under Policies) */}
             {activeTab === "faq" && (
               <div className="variant-card">
+                <h3 style={{ marginBottom: 14 }}>Help Page Header</h3>
+                <p style={{ margin: "-8px 0 14px", fontSize: "13px", color: "var(--muted, #666)" }}>
+                  The heading block at the top of the /faq page.
+                </p>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Eyebrow</span>
+                    <input {...field("helpEyebrow")} placeholder="Help centre" maxLength={100} />
+                  </label>
+                  <label className="field">
+                    <span>Title</span>
+                    <input {...field("helpTitle")} placeholder="Questions, answered plainly" maxLength={100} />
+                  </label>
+                  <label className="field field-wide">
+                    <span>Intro</span>
+                    <textarea
+                      {...field("helpDescription")}
+                      rows={2}
+                      maxLength={500}
+                      placeholder="If your question is not here, WhatsApp us — a person replies, usually within ten minutes."
+                    />
+                    <small>Shown under the title. The WhatsApp number from Store &amp; Contact is linked automatically.</small>
+                  </label>
+                </div>
+
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 16,
+                    gap: 12,
+                    flexWrap: "wrap",
+                    margin: "32px 0 14px",
                   }}
                 >
                   <div>
-                    <h3 style={{ margin: 0 }}>Help & FAQ Management</h3>
+                    <h3 style={{ margin: 0 }}>Help Cards</h3>
                     <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--muted, #666)" }}>
-                      Questions and answers displayed on the /faq page.
+                      The call-to-action cards under the questions (&ldquo;Still stuck?&rdquo;). Up to six.
                     </p>
                   </div>
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={addFaqGroup}
+                    onClick={addHelpCard}
+                    disabled={draft.helpCards.length >= 6}
                     style={{ display: "flex", alignItems: "center", gap: 6 }}
                   >
-                    <Plus size={14} /> Add FAQ Category
+                    <Plus size={14} /> Add Card
                   </button>
                 </div>
 
-                <div style={{ display: "grid", gap: 24 }}>
-                  {draft.faqs.map((group, groupIndex) => (
-                    <div
-                      key={groupIndex}
-                      style={{
-                        border: "1px solid var(--line, #e5e5e5)",
-                        padding: "18px",
-                        borderRadius: "6px",
-                        backgroundColor: "#fafafa",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 14,
-                        }}
-                      >
-                        <label style={{ flex: 1, marginRight: 16 }}>
-                          <span style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted, #666)" }}>
-                            Category Name
-                          </span>
-                          <input
-                            value={group.group}
-                            onChange={(e) =>
-                              updateFaqGroupTitle(groupIndex, e.target.value)
-                            }
-                            placeholder="e.g. Orders & Delivery"
-                            style={{
-                              width: "100%",
-                              fontSize: "15px",
-                              fontWeight: "600",
-                              marginTop: "4px",
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          onClick={() => removeFaqGroup(groupIndex)}
-                          title="Delete category"
-                          style={{ color: "#ef4444" }}
+                {draft.helpCards.length === 0 ? (
+                  <div className="state-row">No cards. The section is hidden on the page until you add one.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {draft.helpCards.map((card, index) => {
+                      const hrefOk = isValidHref(card.href.trim());
+                      return (
+                        <div
+                          key={index}
+                          style={{ border: "1px solid var(--line, #e5e5e5)", borderRadius: 6, padding: 14 }}
                         >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-
-                      <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-                        {group.items.map((item, itemIndex) => (
-                          <div
-                            key={itemIndex}
-                            style={{
-                              backgroundColor: "#fff",
-                              padding: "12px",
-                              border: "1px solid var(--line, #e5e5e5)",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: 6,
-                              }}
-                            >
-                              <span style={{ fontSize: "12px", fontWeight: "600" }}>
-                                Q#{itemIndex + 1}
-                              </span>
-                              {group.items.length > 1 && (
-                                <button
-                                  type="button"
-                                  className="icon-button"
-                                  onClick={() =>
-                                    removeFaqItem(groupIndex, itemIndex)
-                                  }
-                                  title="Remove question"
-                                  style={{ color: "#ef4444" }}
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              )}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                            <strong style={{ fontSize: 13 }}>Card #{index + 1}</strong>
+                            <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => moveHelpCard(index, -1)}
+                                disabled={index === 0}
+                                title="Move up"
+                                aria-label={`Move card ${index + 1} up`}
+                              >
+                                <ArrowUp size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => moveHelpCard(index, 1)}
+                                disabled={index === draft.helpCards.length - 1}
+                                title="Move down"
+                                aria-label={`Move card ${index + 1} down`}
+                              >
+                                <ArrowDown size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => removeHelpCard(index)}
+                                title="Remove card"
+                                aria-label={`Remove card ${index + 1}`}
+                                style={{ color: "#ef4444" }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
-                            <input
-                              value={item.q}
-                              onChange={(e) =>
-                                updateFaqItem(groupIndex, itemIndex, {
-                                  q: e.target.value,
-                                })
-                              }
-                              placeholder="Question text"
-                              style={{ width: "100%", marginBottom: 8 }}
-                            />
-                            <textarea
-                              value={item.a}
-                              onChange={(e) =>
-                                updateFaqItem(groupIndex, itemIndex, {
-                                  a: e.target.value,
-                                })
-                              }
-                              rows={3}
-                              placeholder="Answer text"
-                              style={{ width: "100%" }}
-                            />
                           </div>
-                        ))}
-                      </div>
+                          <div className="field-grid">
+                            <label className="field">
+                              <span>
+                                Title <b>*</b>
+                              </span>
+                              <input
+                                value={card.title}
+                                onChange={(e) => updateHelpCard(index, { title: e.target.value })}
+                                placeholder="Still stuck?"
+                                maxLength={80}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>
+                                Button label <b>*</b>
+                              </span>
+                              <input
+                                value={card.cta}
+                                onChange={(e) => updateHelpCard(index, { cta: e.target.value })}
+                                placeholder="Contact us"
+                                maxLength={40}
+                              />
+                            </label>
+                            <label className="field field-wide">
+                              <span>
+                                Description <b>*</b>
+                              </span>
+                              <input
+                                value={card.body}
+                                onChange={(e) => updateHelpCard(index, { body: e.target.value })}
+                                placeholder="Message the support desk and get a reply within four working hours."
+                                maxLength={300}
+                              />
+                            </label>
+                            <label className="field field-wide">
+                              <span>
+                                Destination <b>*</b>
+                              </span>
+                              <input
+                                value={card.href}
+                                onChange={(e) => updateHelpCard(index, { href: e.target.value })}
+                                placeholder="/contact or https://…"
+                                style={hrefOk ? undefined : { borderColor: "#ef4444" }}
+                              />
+                              {!hrefOk && (
+                                <small style={{ color: "#ef4444" }}>Must start with / or https://</small>
+                              )}
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() => addFaqItem(groupIndex)}
-                        style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 4 }}
-                      >
-                        <Plus size={13} /> Add Question to this category
-                      </button>
-                    </div>
-                  ))}
+                <div className="state-row" style={{ marginTop: 28 }}>
+                  The questions and answers themselves are managed under{" "}
+                  <Link href="/admin/policies" className="text-button" style={{ marginLeft: 4 }}>
+                    Policies &amp; FAQ
+                  </Link>
+                  .
                 </div>
               </div>
             )}

@@ -14,6 +14,36 @@ import { defineModel, baseSchemaOptions, paiseField } from "@/models/base";
  * need a redeploy to do it.
  */
 
+/**
+ * The footer's Help column as it shipped before it became editable. Also the
+ * fallback the public API serves for a settings row written before the field
+ * existed — `.lean()` reads do not apply schema defaults.
+ */
+export const DEFAULT_HELP_LINKS: NonNullable<SettingDocument["helpLinks"]> = [
+  { label: "FAQ", href: "/faq", isActive: true, openInNewTab: false },
+  { label: "Shipping", href: "/policies/shipping", isActive: true, openInNewTab: false },
+  { label: "Returns & exchange", href: "/policies/returns", isActive: true, openInNewTab: false },
+  { label: "Privacy policy", href: "/policies/privacy", isActive: true, openInNewTab: false },
+  { label: "Terms of service", href: "/policies/terms", isActive: true, openInNewTab: false },
+  { label: "My account", href: "/account", isActive: true, openInNewTab: false },
+];
+
+/** The two cards the FAQ page always showed beneath the questions. */
+export const DEFAULT_HELP_CARDS: NonNullable<NonNullable<SettingDocument["helpPage"]>["cards"]> = [
+  {
+    title: "Track an order",
+    body: "See where your order is, download invoices and request a return from your account.",
+    href: "/account/orders",
+    cta: "My orders",
+  },
+  {
+    title: "Planning a wedding?",
+    body: "Bridal orders take 6–8 weeks. Here is the timeline we recommend.",
+    href: "/blog/bridal-timeline-eight-weeks",
+    cta: "Read the guide",
+  },
+];
+
 export interface SettingDocument {
   _id: Types.ObjectId;
   key: "store";
@@ -42,6 +72,36 @@ export interface SettingDocument {
     body: string;
     icon?: string;
   }>;
+
+  /**
+   * The "Help" column in the storefront footer, in display order.
+   *
+   * `href` is either a storefront path (`/faq`) or an absolute http(s) URL.
+   * Inactive links are kept but not rendered, so a seasonal page can be
+   * switched off without losing its entry.
+   */
+  helpLinks?: Array<{
+    label: string;
+    href: string;
+    isActive: boolean;
+    openInNewTab: boolean;
+  }>;
+
+  /**
+   * The `/faq` page around the questions: its header and the "help cards"
+   * beneath the accordion. The questions themselves are `faqs`.
+   */
+  helpPage?: {
+    eyebrow?: string;
+    title?: string;
+    description?: string;
+    cards?: Array<{
+      title: string;
+      body: string;
+      href: string;
+      cta: string;
+    }>;
+  };
 
   contactPage?: {
     eyebrow?: string;
@@ -188,6 +248,40 @@ const settingSchema = new mongoose.Schema<SettingDocument>(
           icon: "ShieldCheck",
         },
       ],
+    },
+
+    helpLinks: {
+      type: [
+        {
+          label: { type: String, required: true, trim: true },
+          href: { type: String, required: true, trim: true },
+          isActive: { type: Boolean, default: true },
+          openInNewTab: { type: Boolean, default: false },
+        },
+      ],
+      default: () => DEFAULT_HELP_LINKS.map((link) => ({ ...link })),
+    },
+
+    helpPage: {
+      eyebrow: { type: String, trim: true, default: "Help centre" },
+      title: { type: String, trim: true, default: "Questions, answered plainly" },
+      description: {
+        type: String,
+        trim: true,
+        default:
+          "If your question is not here, WhatsApp us — a person replies, usually within ten minutes.",
+      },
+      cards: {
+        type: [
+          {
+            title: { type: String, required: true, trim: true },
+            body: { type: String, required: true, trim: true },
+            href: { type: String, required: true, trim: true },
+            cta: { type: String, required: true, trim: true },
+          },
+        ],
+        default: () => DEFAULT_HELP_CARDS.map((card) => ({ ...card })),
+      },
     },
 
     contactPage: {

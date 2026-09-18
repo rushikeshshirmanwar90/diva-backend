@@ -14,7 +14,6 @@ export const HERO_LINK_OPTIONS = [
   { label: "Wishlist", href: "/wishlist" },
   { label: "My account", href: "/account" },
   { label: "About us", href: "/about" },
-  { label: "Contact & stores", href: "/contact" },
 ] as const;
 
 /** The fixed storefront sections above — routes that exist in the codebase. */

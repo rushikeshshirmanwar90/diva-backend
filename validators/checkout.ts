@@ -85,6 +85,35 @@ export const listOrdersSchema = pagination.extend({
   status: z.enum(ORDER_STATUSES).optional(),
 });
 
+/** Staff listing: the customer filter plus a prefix search on order number or email. */
+export const listOrdersAdminSchema = listOrdersSchema.extend({
+  search: z.string().trim().max(120).optional(),
+});
+
+/**
+ * Statuses staff may set by hand.
+ *
+ * Only the fulfilment leg. Payment states are owned by the gateway and its
+ * webhooks; cancellation and shipment creation have their own endpoints
+ * with their own side effects. What is left is the courier's journey, for a
+ * store that ships some parcels outside Shiprocket — or whose webhook has not
+ * arrived — and needs the customer's tracker to move anyway.
+ */
+export const MANUAL_ORDER_STATUSES = [
+  "SHIPPED",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "RETURN_REQUESTED",
+  "RETURN_PICKED",
+] as const;
+
+export const setOrderStatusSchema = z
+  .object({
+    status: z.enum(MANUAL_ORDER_STATUSES),
+    note: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
 export const orderNumberParam = z.object({
   orderNumber: z
     .string()

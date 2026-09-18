@@ -19,6 +19,7 @@ import {
   Tags,
   Users,
   X,
+  ShoppingBag,
 } from "lucide-react";
 import { api, type AdminUser } from "@/app/admin/_lib/api";
 import { initials } from "@/app/admin/_lib/format";
@@ -71,14 +72,15 @@ type NavEntry = {
 };
 
 const WORKSPACE_NAV: NavEntry[] = [
-  { label: "Overview", href: "/admin", icon: LayoutDashboard, hidden: true },
+  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Home", href: "/admin/home", icon: Home },
   { label: "Products", href: "/admin/products", icon: Gem },
   { label: "Categories", href: "/admin/categories", icon: Tags },
   { label: "Collections", href: "/admin/collections", icon: Layers, hidden: true },
   { label: "Inventory", href: "/admin/inventory", icon: Boxes, hidden: true },
   { label: "Customers", href: "/admin/customers", icon: Users, hidden: true },
-  { label: "Policies", href: "/admin/policies", icon: FileText },
+  { label: "Policies & FAQ", href: "/admin/policies", icon: FileText },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

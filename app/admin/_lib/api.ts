@@ -246,6 +246,170 @@ export type DashboardStats = {
     lowStockProducts: { id: string; title: string; slug: string; sku: string; available: number; threshold: number }[];
     draftProducts: { id: string; title: string; slug: string; updatedAt: string }[];
   };
+  /** Absent for roles without `order:read`. */
+  sales: SalesStats | null;
+  traffic: TrafficStats;
+};
+
+export type TrafficStats = {
+  windowDays: number;
+  views: { current: number; previous: number };
+  visitors: { current: number; previous: number };
+  today: { views: number; visitors: number };
+  daily: { date: string; views: number; visitors: number }[];
+  topViewed: {
+    productId: string;
+    title: string;
+    slug: string;
+    imageUrl?: string;
+    status: string;
+    views: number;
+    visitors: number;
+    unitsSold: number;
+    conversionPercent: number;
+  }[];
+  sources: { host: string | null; views: number }[];
+};
+
+export type OrderStatus =
+  | "PENDING"
+  | "PAYMENT_INITIATED"
+  | "PAYMENT_FAILED"
+  | "ABANDONED"
+  | "PAYMENT_SUCCESS"
+  | "CONFIRMED"
+  | "SHIPMENT_CREATED"
+  | "SHIPPED"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "CANCELLED"
+  | "RETURN_REQUESTED"
+  | "RETURN_PICKED"
+  | "REFUNDED";
+
+export type PaymentMethod = "PHONEPE" | "COD" | "MANUAL";
+
+export type OrderAddress = {
+  fullName: string;
+  phone: string;
+  alternatePhone?: string;
+  line1: string;
+  line2?: string;
+  landmark?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+};
+
+export type OrderItem = {
+  productId: string;
+  variantId: string;
+  title: string;
+  slug: string;
+  sku: string;
+  imageUrl?: string;
+  colour: string;
+  size?: string;
+  quantity: number;
+  unitPricePaise: number;
+  lineSubtotalPaise: number;
+  lineDiscountPaise: number;
+  gstPercent: number;
+  lineGstPaise: number;
+  lineTotalPaise: number;
+};
+
+export type AdminOrder = {
+  _id: string;
+  orderNumber: string;
+  userId: string;
+  customerEmail: string;
+  customerPhone?: string;
+  items: OrderItem[];
+  shippingAddress: OrderAddress;
+  billingAddress?: OrderAddress;
+  totals: {
+    subtotalPaise: number;
+    discountPaise: number;
+    shippingPaise: number;
+    gstPaise: number;
+    grandTotalPaise: number;
+  };
+  coupon?: { code: string; type: string; value: number; discountPaise: number } | null;
+  status: OrderStatus;
+  statusHistory: { status: OrderStatus; at: string; note?: string; actorRole?: string }[];
+  paymentMethod: PaymentMethod;
+  paidAt?: string;
+  reservationExpiresAt?: string | null;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  deliveredAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminOrderDetail = {
+  order: AdminOrder;
+  payment: {
+    id: string;
+    method: PaymentMethod;
+    status: string;
+    amountPaise: number;
+    confirmedAmountPaise: number | null;
+    amountMismatch: boolean;
+    merchantTransactionId: string;
+    phonePeTransactionId: string | null;
+    paymentInstrument: string | null;
+    failureMessage: string | null;
+    refundedAmountPaise: number;
+    completedAt: string | null;
+  } | null;
+  shipment: {
+    id: string;
+    shiprocketOrderId: string | null;
+    awbCode: string | null;
+    courierName: string | null;
+    trackingUrl: string | null;
+    status: string;
+    estimatedDeliveryAt: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    events: { status: string; description?: string; location?: string; occurredAt: string }[];
+  } | null;
+  manualTransitions: OrderStatus[];
+};
+
+export type SalesStats = {
+  windowDays: number;
+  revenue: { currentPaise: number; previousPaise: number };
+  orders: { current: number; previous: number };
+  averageOrderValue: { currentPaise: number; previousPaise: number };
+  today: { revenuePaise: number; orders: number };
+  daily: { date: string; revenuePaise: number; orders: number }[];
+  byPaymentMethod: Record<PaymentMethod, { orders: number; revenuePaise: number }>;
+  pipeline: { awaitingPayment: number; toShip: number; inTransit: number; returnsInProgress: number };
+  outcomes: { delivered: number; cancelled: number; paymentFailed: number; refunded: number };
+  topProducts: { productId: string; title: string; slug: string; imageUrl?: string; units: number; revenuePaise: number }[];
+  recentOrders: {
+    id: string;
+    orderNumber: string;
+    customerName: string;
+    customerEmail: string;
+    itemCount: number;
+    grandTotalPaise: number;
+    status: OrderStatus;
+    paymentMethod: PaymentMethod;
+    createdAt: string;
+  }[];
+  customers: { newInWindow: number; returningInWindow: number };
+  money: {
+    codOutstandingPaise: number;
+    codOutstandingOrders: number;
+    refundsDue: number;
+    amountMismatches: number;
+  };
 };
 
 export type ProductVariant = {
@@ -409,6 +573,13 @@ export type StoreAssurance = {
   icon?: string;
 };
 
+export type HelpLink = {
+  label: string;
+  href: string;
+  isActive: boolean;
+  openInNewTab: boolean;
+};
+
 export type StoreLocation = {
   city: string;
   tag?: string;
@@ -416,6 +587,20 @@ export type StoreLocation = {
   phone: string;
   hours: string;
   note?: string;
+};
+
+export type HelpCard = {
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+};
+
+export type HelpPageSettings = {
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  cards?: HelpCard[];
 };
 
 export type ContactPageSettings = {
@@ -459,6 +644,8 @@ export type StoreSettings = {
   copyrightText?: string;
   paymentMethodsNote?: string;
   assurances?: StoreAssurance[];
+  helpLinks?: HelpLink[];
+  helpPage?: HelpPageSettings;
   contactPage?: ContactPageSettings;
   faqs?: FaqGroup[];
 };

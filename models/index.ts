@@ -20,6 +20,7 @@ export { RefreshTokenModel, type RefreshTokenDocument } from "@/models/RefreshTo
 export { CategoryModel, type CategoryDocument } from "@/models/Category";
 export { CollectionModel, type CollectionDocument } from "@/models/Collection";
 export { ProductModel, type ProductDocument, type Variant } from "@/models/Product";
+export { ProductViewModel, type ProductViewDocument } from "@/models/ProductView";
 
 export { CartModel, type CartDocument, type CartItem } from "@/models/Cart";
 export { AddressModel, type AddressDocument } from "@/models/Address";

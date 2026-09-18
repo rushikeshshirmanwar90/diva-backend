@@ -73,6 +73,7 @@ export function MetricCard({
   value,
   delta,
   direction,
+  deltaLabel = "vs last month",
   icon: Icon,
   footnote,
 }: {
@@ -81,6 +82,8 @@ export function MetricCard({
   /** Omit when there is no prior period to compare against. */
   delta?: string;
   direction?: "up" | "down";
+  /** What the delta is measured against. */
+  deltaLabel?: string;
   icon: LucideIcon;
   footnote?: string;
 }) {
@@ -96,7 +99,7 @@ export function MetricCard({
       {delta ? (
         <div className={`metric-delta ${direction === "down" ? "metric-delta-down" : ""}`}>
           {direction === "down" ? <ArrowDownRight /> : <ArrowUpRight />} {delta}{" "}
-          <span>vs last month</span>
+          <span>{deltaLabel}</span>
         </div>
       ) : (
         /**

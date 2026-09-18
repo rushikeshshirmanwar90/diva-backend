@@ -36,6 +36,50 @@ const assuranceItemSchema = z
   })
   .strict();
 
+/**
+ * A footer link destination: a storefront path or an absolute http(s) URL.
+ *
+ * Nothing else — `javascript:`, `data:` and protocol-relative `//` forms are
+ * rejected here rather than trusted to the renderer. The footer is on every
+ * page, so a bad href here is a bad href everywhere.
+ */
+const linkHref = z
+  .string()
+  .trim()
+  .min(1, "Add a destination")
+  .max(500)
+  .refine(
+    (value) => /^\/(?!\/)[^\s]*$/.test(value) || /^https?:\/\/[^\s]+$/i.test(value),
+    "Use a storefront path like /faq or a full https:// address",
+  );
+
+const helpLinkSchema = z
+  .object({
+    label: z.string().trim().min(1, "Give the link a label").max(60),
+    href: linkHref,
+    isActive: z.boolean().default(true),
+    openInNewTab: z.boolean().default(false),
+  })
+  .strict();
+
+const helpCardSchema = z
+  .object({
+    title: z.string().trim().min(1, "Title is required").max(80),
+    body: z.string().trim().min(1, "Description is required").max(300),
+    href: linkHref,
+    cta: z.string().trim().min(1, "Button label is required").max(40),
+  })
+  .strict();
+
+const helpPageSchema = z
+  .object({
+    eyebrow: z.string().trim().max(100).optional(),
+    title: z.string().trim().max(100).optional(),
+    description: z.string().trim().max(500).optional(),
+    cards: z.array(helpCardSchema).max(6).optional(),
+  })
+  .strict();
+
 const storeLocationSchema = z
   .object({
     city: z.string().trim().min(1, "City is required").max(60),
@@ -83,6 +127,8 @@ export const updateSettingSchema = z
     copyrightText: z.string().trim().max(200).optional(),
     paymentMethodsNote: z.string().trim().max(200).optional(),
     assurances: z.array(assuranceItemSchema).max(10).optional(),
+    helpLinks: z.array(helpLinkSchema).max(20).optional(),
+    helpPage: helpPageSchema.optional(),
     contactPage: contactPageSchema.optional(),
     faqs: z.array(faqGroupSchema).max(20).optional(),
   })

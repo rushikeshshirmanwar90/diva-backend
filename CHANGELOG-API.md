@@ -17,6 +17,43 @@ field or a new enum member is not breaking.
 
 ## Unreleased
 
+### 2026-09-18 — Admin orders
+
+Additive.
+
+- **Added** `GET /admin/orders` (`order:read`) — paginated, `status` filter, `search` prefix on order number or customer email.
+- **Added** `GET /admin/orders/:orderNumber` (`order:read`) — `{ order, payment, shipment, manualTransitions }`; `shipment.events` newest first.
+- **Added** `POST /admin/orders/:orderNumber/status` (`order:write`) — body `{ status, note? }`, `status` one of `SHIPPED | OUT_FOR_DELIVERY | DELIVERED | RETURN_REQUESTED | RETURN_PICKED`. Runs the normal state machine (409 on an illegal move); DELIVERED sets `deliveredAt` and, for COD, marks the payment collected. Customer notifications fire as for courier events.
+
+### 2026-09-18 — Footer assurance strip removed
+
+- The storefront no longer renders the four assurance badges above the footer. `assurances` on `GET /settings` / `PATCH /admin/settings` is **retained but unused**; the admin editor for it is gone.
+
+### 2026-09-18 — Contact page retired
+
+- The storefront no longer has a `/contact` page. `/contact` is **removed** from the hero-slide destination list (`HERO_LINK_OPTIONS`); an existing slide pointing there shows as "Unavailable" in the admin and must be re-pointed. `helpLinks` and `helpPage.cards` defaults no longer include it.
+- `contactPage` on `GET /settings` / `PATCH /admin/settings` is **retained but unused** by the storefront (kept for API compatibility; the admin tab that edited it is gone).
+
+### 2026-09-18 — Footer help links
+
+Additive.
+
+- **Added** `helpPage` (`{ eyebrow, title, description, cards: [{ title, body, href, cta }] }`) to `GET /settings` and `PATCH /admin/settings` — the `/faq` page's header and the help cards beneath the questions. Same `href` rules as `helpLinks`; at most 6 cards.
+- **Added** `helpLinks` (`[{ label, href, isActive, openInNewTab }]`, ordered) to `GET /settings` and `PATCH /admin/settings`. `href` must be a storefront path (`/faq`) or an absolute http(s) URL. Defaults to the seven links the storefront footer used to hard-code.
+
+### 2026-09-17 — Recommendation signals
+
+Additive.
+
+- **Added** `GET /products/:slug/signals` — public. `{ coPurchased: [{productId, slug, count}], coViewed: [...], volume: { orders, visitors } }`. Co-purchase counts orders (last 180 days, paid statuses) containing both products; co-view counts distinct visitors (last 60 days) who opened both pages. Cached server-side for 5 minutes.
+
+### 2026-09-17 — Product traffic
+
+Additive.
+
+- **Added** `POST /products/:slug/view` — public, unauthenticated beacon from the storefront product page. Body `{ visitorId, referrer? }`. Answers 202 with `{ recorded }`; repeat views by the same visitor within 30 minutes, unknown slugs and staff sessions are silently not recorded. Rows expire after 180 days.
+- **Added** `traffic` to `GET /admin/stats` (views, unique visitors, daily series, most-viewed products with sales conversion, referrer hosts). `sales` on the same response is now `null` for roles without `order:read` instead of the route answering 403.
+
 ### 2026-09-17 — Cash on delivery
 
 Additive. No existing contracts broken.

@@ -28,11 +28,14 @@ import {
   listMediaSchema,
   importImageSchema,
 } from "@/validators/catalog";
+import { productViewSchema } from "@/validators/analytics";
 import {
   createOrderSchema,
   listOrdersSchema,
   orderNumberParam,
   cancelOrderSchema,
+  listOrdersAdminSchema,
+  setOrderStatusSchema,
   initiatePaymentSchema,
   merchantTransactionParam,
   refundSchema,
@@ -263,6 +266,26 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
+  path: "/products/{slug}/signals",
+  tags: ["Catalogue"],
+  summary:
+    "Co-purchase and co-view counts for a product — the behavioural half of the storefront's recommendations.",
+  request: { params: z.object({ slug: z.string() }) },
+  responses: { ...okResponse("Product signals"), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/products/{slug}/view",
+  tags: ["Catalogue"],
+  summary:
+    "Storefront view beacon. Public and fire-and-forget; repeats within 30 minutes, unknown slugs and staff sessions are not recorded.",
+  request: { params: z.object({ slug: z.string() }), ...jsonBody(productViewSchema) },
+  responses: { ...okResponse("View recorded"), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "get",
   path: "/categories",
   tags: ["Catalogue"],
   summary: "List categories",
@@ -307,6 +330,36 @@ for (const [path, method, schema, summary] of adminPaths) {
     responses: { ...okResponse(summary), ...errorResponses },
   });
 }
+
+registry.registerPath({
+  method: "get",
+  path: "/admin/orders",
+  tags: ["Admin"],
+  summary: "Every order, newest first; filter by status, search by order number or email prefix",
+  security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+  request: { query: listOrdersAdminSchema },
+  responses: { ...okResponse("Orders"), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/admin/orders/{orderNumber}",
+  tags: ["Admin"],
+  summary: "One order with its payment, shipment (courier events) and the manual status moves allowed from here",
+  security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+  request: { params: orderNumberParam },
+  responses: { ...okResponse("Order detail"), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/admin/orders/{orderNumber}/status",
+  tags: ["Admin"],
+  summary: "Move an order along the courier leg by hand (shipped, out for delivery, delivered, returns)",
+  security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+  request: { params: orderNumberParam, ...jsonBody(setOrderStatusSchema) },
+  responses: { ...okResponse("The updated order"), ...errorResponses },
+});
 
 registry.registerPath({
   method: "post",

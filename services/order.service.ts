@@ -3,10 +3,11 @@ import { ApiError } from "@/lib/api/errors";
 import { priceProduct, PricingError } from "@/lib/pricing/engine";
 import { codPolicy, getStoreSettings, isPincodeBlocked } from "@/lib/settings";
 import { distributePaise, formatPaise, percentOf } from "@/lib/money";
-import { assertTransition, CUSTOMER_CANCELLABLE } from "@/lib/orders/state-machine";
+import { assertTransition, CUSTOMER_CANCELLABLE, nextStatuses } from "@/lib/orders/state-machine";
 import * as orders from "@/repositories/order.repository";
 import * as payments from "@/repositories/payment.repository";
 import * as products from "@/repositories/product.repository";
+import * as shipments from "@/repositories/shipment.repository";
 import { notify } from "@/services/notification.service";
 import * as shippingService from "@/services/shipping.service";
 import { AddressModel } from "@/models/Address";
@@ -14,6 +15,8 @@ import { CouponModel, CouponRedemptionModel } from "@/models/Coupon";
 import type { OrderDocument } from "@/models/Order";
 import type { SettingDocument } from "@/models/Setting";
 import type { CreateOrderInput } from "@/validators/checkout";
+import { MANUAL_ORDER_STATUSES } from "@/validators/checkout";
+import type { OrderStatus } from "@/models/enums";
 
 /**
  * Order creation and lifecycle.
@@ -306,6 +309,122 @@ export async function getOrderByNumberForStaff(orderNumber: string) {
   const order = await orders.findByNumber(orderNumber);
   if (!order) throw ApiError.notFound("We could not find that order.");
   return order;
+}
+
+export async function listOrdersForStaff(query: {
+  page: number;
+  limit: number;
+  status?: OrderStatus;
+  search?: string;
+}) {
+  return orders.listForAdmin(query);
+}
+
+/**
+ * The order with everything the console shows beside it: the latest payment
+ * attempt, the shipment (with its courier events), and which manual status
+ * moves are legal from here — so the UI offers only buttons that will work.
+ */
+export async function getOrderDetailForStaff(orderNumber: string) {
+  const order = await getOrderByNumberForStaff(orderNumber);
+
+  const [payment, shipment] = await Promise.all([
+    payments.findLatestForOrder(order._id),
+    shipments.findByOrderId(order._id),
+  ]);
+
+  const manualTransitions = nextStatuses(order.status).filter((status) =>
+    (MANUAL_ORDER_STATUSES as readonly string[]).includes(status),
+  );
+
+  return {
+    order,
+    payment: payment
+      ? {
+          id: String(payment._id),
+          method: payment.method,
+          status: payment.status,
+          amountPaise: payment.amountPaise,
+          confirmedAmountPaise: payment.confirmedAmountPaise ?? null,
+          amountMismatch: payment.amountMismatch,
+          merchantTransactionId: payment.merchantTransactionId,
+          phonePeTransactionId: payment.phonePeTransactionId ?? null,
+          paymentInstrument: payment.paymentInstrument ?? null,
+          failureMessage: payment.failureMessage ?? null,
+          refundedAmountPaise: payment.refundedAmountPaise,
+          completedAt: payment.completedAt ?? null,
+        }
+      : null,
+    shipment: shipment
+      ? {
+          id: String(shipment._id),
+          shiprocketOrderId: shipment.shiprocketOrderId ?? null,
+          awbCode: shipment.awbCode ?? null,
+          courierName: shipment.courierName ?? null,
+          trackingUrl: shipment.trackingUrl ?? null,
+          status: shipment.status,
+          estimatedDeliveryAt: shipment.estimatedDeliveryAt ?? null,
+          shippedAt: shipment.shippedAt ?? null,
+          deliveredAt: shipment.deliveredAt ?? null,
+          events: [...shipment.trackingEvents].reverse(),
+        }
+      : null,
+    manualTransitions,
+  };
+}
+
+/**
+ * A staff member moving the order along the courier leg by hand.
+ *
+ * Goes through the same state machine as the webhooks, so an illegal jump is
+ * a 409 here exactly as it would be a dropped scan there. DELIVERED carries
+ * the same side effects as a courier-reported delivery: `deliveredAt`, and
+ * for cash on delivery, the payment row flipping to collected.
+ */
+export async function setOrderStatusByStaff(
+  orderNumber: string,
+  input: { status: (typeof MANUAL_ORDER_STATUSES)[number]; note?: string },
+  staffId: string,
+) {
+  const order = await orders.findByNumber(orderNumber);
+  if (!order) throw ApiError.notFound("We could not find that order.");
+
+  assertTransition(order.status, input.status);
+
+  const delivered = input.status === "DELIVERED";
+  const moved = await orders.transition(order._id, input.status, order.status, {
+    note: input.note ?? `Marked ${input.status.toLowerCase().replace(/_/g, " ")} by staff`,
+    actorId: staffId,
+    actorRole: "staff",
+    set: delivered
+      ? { deliveredAt: new Date(), ...(order.paymentMethod === "COD" ? { paidAt: new Date() } : {}) }
+      : {},
+  });
+
+  if (!moved) {
+    throw ApiError.conflict("This order changed while it was being updated. Please reload.");
+  }
+
+  if (delivered && order.paymentMethod === "COD") {
+    await payments.markCodCollected(order._id);
+  }
+
+  const notification = {
+    SHIPPED: { type: "ORDER_SHIPPED" as const, title: "Order shipped", body: `Order ${order.orderNumber} is on its way.` },
+    OUT_FOR_DELIVERY: { type: "ORDER_SHIPPED" as const, title: "Out for delivery", body: `Order ${order.orderNumber} is out for delivery today.` },
+    DELIVERED: { type: "ORDER_DELIVERED" as const, title: "Order delivered", body: `Order ${order.orderNumber} has been delivered.` },
+  }[input.status as string];
+
+  if (notification) {
+    void notify({
+      userId: String(order.userId),
+      ...notification,
+      link: `/orders/${order.orderNumber}`,
+      payload: { orderNumber: order.orderNumber },
+    });
+  }
+
+  return moved;
 }
 
 // ---------------------------------------------------------------------------
