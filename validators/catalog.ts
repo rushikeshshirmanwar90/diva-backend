@@ -181,8 +181,8 @@ export const createProductSchema = z
       .default({ occasions: [] }),
 
     tags: z.array(z.string().trim().max(40)).max(25).default([]),
-    shippingReturns: z.string().trim().max(4000).optional(),
-    careInstructions: z.string().trim().max(4000).optional(),
+    shippingReturns: z.string().trim().max(4000).nullish(),
+    careInstructions: z.string().trim().max(4000).nullish(),
 
     status: z.enum(PRODUCT_STATUSES).default("DRAFT"),
     isFeatured: z.boolean().default(false),

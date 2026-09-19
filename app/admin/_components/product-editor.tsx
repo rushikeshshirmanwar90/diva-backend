@@ -93,6 +93,9 @@ function toVariantForm(variant: ProductDetail["variants"][number]): VariantForm 
   };
 }
 
+/** Paths the form renders a `field-error` for; everything else goes in the banner. */
+const INLINE_ERROR_PATHS = /^(title|videoUrl|pricePaise|variants\.\d+\.(sku|colour))$/;
+
 export function ProductEditor({ product }: { product?: ProductDetail }) {
   const router = useRouter();
   const { notify } = useToast();
@@ -277,12 +280,22 @@ export function ProductEditor({ product }: { product?: ProductDetail }) {
       router.refresh();
     } catch (caught) {
       if (caught instanceof AdminApiError) {
-        setError(caught.message);
         // The server returns dotted paths (`variants.0.netWeightMg`), so the
         // form can place each message beside the input that caused it rather
         // than dumping a list at the top.
         setFieldErrors(
           Object.fromEntries(caught.details.map((detail) => [detail.path, detail.message])),
+        );
+        // Anything without an inline slot would otherwise vanish behind the
+        // generic "submitted data is invalid" banner, leaving no clue which
+        // field the server rejected.
+        const orphaned = caught.details.filter(
+          (detail) => !INLINE_ERROR_PATHS.test(detail.path),
+        );
+        setError(
+          orphaned.length
+            ? `${caught.message}: ${orphaned.map((d) => `${d.path} — ${d.message}`).join("; ")}`
+            : caught.message,
         );
       } else {
         setError("Could not save this product.");
