@@ -246,6 +246,12 @@ export async function list(query: ListProductsQuery, options: { publicOnly: bool
               // Carried so a storefront card knows which edits a piece belongs
               // to without a second request per product.
               collectionIds: 1,
+              // Same reason: the storefront's collections and its occasion /
+              // wearer filters are built from `attributes.occasions` and
+              // `attributes.gender` on the listing, not from a detail fetch
+              // per product. Without this every listed product came through
+              // with no occasions and the collection pages were empty.
+              attributes: 1,
               soldCount: 1,
               createdAt: 1,
               variants: {
@@ -255,7 +261,7 @@ export async function list(query: ListProductsQuery, options: { publicOnly: bool
                   in: {
                     _id: "$$variant._id",
                     sku: "$$variant.sku",
-                    colour: "$variant.colour",
+                    colour: "$$variant.colour",
                     size: "$$variant.size",
                     stock: "$$variant.stock",
                     reservedStock: "$$variant.reservedStock",

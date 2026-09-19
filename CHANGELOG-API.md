@@ -17,6 +17,13 @@ field or a new enum member is not breaking.
 
 ## Unreleased
 
+### 2026-09-19 — Product listing carries attributes
+
+Additive.
+
+- **Added** `attributes` (`gender`, `occasions`, `style`, `finish`, `certification`) to each item of `GET /products`. It was already on `GET /products/:slug`; the listing projection had dropped it, so a storefront grouping products by occasion saw none.
+- **Fixed** `variants[].colour` on `GET /products` items — a `$variant.colour` / `$$variant.colour` typo in the projection returned it as `undefined` on every listing row.
+
 ### 2026-09-18 — Admin orders
 
 Additive.
