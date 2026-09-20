@@ -539,6 +539,23 @@ export type HeroSlide = {
   isActive: boolean;
 };
 
+export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type AdminReview = {
+  _id: string;
+  productId: { _id: string; title: string; slug: string } | null;
+  userId: { _id: string; name: string; email: string } | null;
+  rating: number;
+  title?: string;
+  body?: string;
+  isVerifiedPurchase: boolean;
+  isFeatured: boolean;
+  status: ReviewStatus;
+  rejectionReason?: string;
+  helpfulCount: number;
+  createdAt: string;
+};
+
 export type RatesResponse = {
   rates: Record<string, number | undefined>;
   detail: { _id: string; ratePerGramPaise: number; effectiveAt: string }[];

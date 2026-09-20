@@ -95,6 +95,13 @@ const envSchema = z.object({
    * 503 rather than accepting tokens it cannot correctly verify.
    */
   GOOGLE_CLIENT_ID: z.string().optional(),
+  /**
+   * The iOS and Android OAuth client ids, comma-separated. A token the mobile
+   * app obtains carries *its* platform client id as `aud`, not the web one,
+   * so verification must accept all of them. Same Google Cloud project; not
+   * secrets. Optional — without it only the website can sign in with Google.
+   */
+  GOOGLE_MOBILE_CLIENT_IDS: z.string().optional(),
 
   // --- Cloudinary ---------------------------------------------------------
   /**
@@ -287,10 +294,16 @@ export function phonePeConfig() {
 
 /** Google Sign-In credentials, or `null` when the integration is not provisioned. */
 export function googleAuthConfig() {
-  const { GOOGLE_CLIENT_ID } = env;
+  const { GOOGLE_CLIENT_ID, GOOGLE_MOBILE_CLIENT_IDS } = env;
   if (!GOOGLE_CLIENT_ID) return null;
 
-  return { clientId: GOOGLE_CLIENT_ID };
+  const mobile = (GOOGLE_MOBILE_CLIENT_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  /** Every `aud` a token may legitimately carry: the web client plus each app client. */
+  return { clientId: GOOGLE_CLIENT_ID, audiences: [GOOGLE_CLIENT_ID, ...mobile] };
 }
 
 export function shiprocketConfig() {

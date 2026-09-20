@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { objectId, pagination, imageInput } from "@/validators/common";
+import { objectId, pagination, imageInput, booleanFlag } from "@/validators/common";
 import { MODERATION_STATUSES } from "@/models/enums";
 
 /**
@@ -42,8 +42,17 @@ export const listReviewsForAdminSchema = z
     ...pagination.shape,
     status: z.enum(MODERATION_STATUSES).optional(),
     productId: objectId.optional(),
+    /** `true` narrows to the reviews currently picked for the homepage. */
+    featured: booleanFlag.optional(),
   })
   .strict();
+
+/**
+ * `PATCH /admin/reviews/:id/feature` — pick a review for the homepage, or
+ * take it off. Separate from moderation: featuring is a merchandising choice
+ * layered on top of an already-approved review, not a status of its own.
+ */
+export const featureReviewSchema = z.object({ isFeatured: z.boolean() }).strict();
 
 export const moderateReviewSchema = z
   .object({

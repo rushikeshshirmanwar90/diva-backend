@@ -33,6 +33,14 @@ export interface ReviewDocument {
   moderatedAt?: Date;
   rejectionReason?: string;
 
+  /**
+   * Hand-picked for the homepage's "What customers actually say" section.
+   * Only ever shown while the review is also APPROVED — rejecting a featured
+   * review pulls it off the homepage without staff needing to remember to
+   * unfeature it as well.
+   */
+  isFeatured: boolean;
+
   helpfulCount: number;
   /** Prevents one account inflating a review's helpful count repeatedly. */
   helpfulUserIds: Types.ObjectId[];
@@ -71,6 +79,8 @@ const reviewSchema = new mongoose.Schema<ReviewDocument>(
     moderatedAt: { type: Date },
     rejectionReason: { type: String, maxlength: 300 },
 
+    isFeatured: { type: Boolean, default: false },
+
     helpfulCount: { type: Number, default: 0, min: 0 },
     helpfulUserIds: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
@@ -101,5 +111,8 @@ reviewSchema.index({ productId: 1, status: 1, createdAt: -1 });
 
 /** The moderation queue. */
 reviewSchema.index({ status: 1, createdAt: 1 });
+
+/** The homepage testimonials: featured and approved, newest first. */
+reviewSchema.index({ isFeatured: 1, status: 1, createdAt: -1 });
 
 export const ReviewModel: Model<ReviewDocument> = defineModel("Review", reviewSchema);

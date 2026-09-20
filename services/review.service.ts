@@ -113,8 +113,49 @@ export async function listForAdmin(options: {
   limit: number;
   status?: string;
   productId?: string;
+  featured?: boolean;
 }) {
   return reviews.listForAdmin(options);
+}
+
+/**
+ * The homepage can hold this many testimonials before the grid starts to
+ * look like a review page. Enforced here so the admin gets a clear message
+ * rather than a silently truncated section.
+ */
+export const MAX_FEATURED_REVIEWS = 8;
+
+/** Picks a review for the homepage, or takes it off. */
+export async function setFeatured(id: string, isFeatured: boolean) {
+  const review = await reviews.findById(id);
+  if (!review) throw ApiError.notFound("We could not find that review.");
+
+  if (isFeatured) {
+    if (review.status !== "APPROVED") {
+      throw ApiError.badRequest("Only approved reviews can be shown on the homepage.");
+    }
+    if (!review.body?.trim()) {
+      throw ApiError.badRequest("This review has no text to quote on the homepage.");
+    }
+    if (!review.isFeatured && (await reviews.countFeatured()) >= MAX_FEATURED_REVIEWS) {
+      throw ApiError.badRequest(
+        `The homepage already shows ${MAX_FEATURED_REVIEWS} reviews. Remove one before adding another.`,
+      );
+    }
+  }
+
+  const updated = await reviews.setFeatured(id, isFeatured);
+  if (!updated) throw ApiError.notFound("We could not find that review.");
+  return updated;
+}
+
+/** The public homepage section: featured reviews plus the store-wide rating. */
+export async function listFeatured() {
+  const [items, summary] = await Promise.all([
+    reviews.listFeatured(MAX_FEATURED_REVIEWS),
+    reviews.overallRating(),
+  ]);
+  return { items, summary };
 }
 
 export async function listForUser(userId: string, options: { page: number; limit: number }) {

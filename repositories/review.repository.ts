@@ -108,10 +108,12 @@ export async function listForAdmin(options: {
   limit: number;
   status?: string;
   productId?: string;
+  featured?: boolean;
 }) {
   const filter: Record<string, unknown> = {};
   if (options.status) filter.status = options.status;
   if (options.productId) filter.productId = options.productId;
+  if (options.featured !== undefined) filter.isFeatured = options.featured;
 
   const [items, total] = await Promise.all([
     ReviewModel.find(filter)
@@ -160,6 +162,88 @@ export async function moderate(
     },
     { returnDocument: "after" },
   ).lean();
+}
+
+export async function setFeatured(id: string, isFeatured: boolean) {
+  return ReviewModel.findByIdAndUpdate(id, { $set: { isFeatured } }, { returnDocument: "after" }).lean();
+}
+
+export async function countFeatured() {
+  return ReviewModel.countDocuments({ isFeatured: true });
+}
+
+/**
+ * The homepage testimonials: featured **and** approved.
+ *
+ * Both flags are checked here, not just `isFeatured`, so a review that staff
+ * reject after featuring it drops off the homepage on its own. The author's
+ * name and the city of their default address are joined in — the storefront
+ * shows "Shalini Iyer · Bengaluru" under each quote, and neither is stored on
+ * the review itself.
+ */
+export async function listFeatured(limit: number) {
+  return ReviewModel.aggregate([
+    { $match: { isFeatured: true, status: "APPROVED" } },
+    { $sort: { createdAt: -1 } },
+    { $limit: limit },
+    {
+      $lookup: {
+        from: "users",
+        localField: "userId",
+        foreignField: "_id",
+        as: "author",
+        // Only the name: a review must never leak the reviewer's email.
+        pipeline: [{ $project: { name: 1 } }],
+      },
+    },
+    {
+      $lookup: {
+        from: "addresses",
+        let: { uid: "$userId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
+          { $sort: { isDefault: -1, createdAt: -1 } },
+          { $limit: 1 },
+          { $project: { city: 1 } },
+        ],
+        as: "address",
+      },
+    },
+    {
+      $lookup: {
+        from: "products",
+        localField: "productId",
+        foreignField: "_id",
+        as: "product",
+        pipeline: [{ $project: { title: 1, slug: 1 } }],
+      },
+    },
+    {
+      $project: {
+        rating: 1,
+        title: 1,
+        body: 1,
+        isVerifiedPurchase: 1,
+        createdAt: 1,
+        authorName: { $ifNull: [{ $first: "$author.name" }, "Diva customer"] },
+        city: { $first: "$address.city" },
+        product: { $first: "$product" },
+      },
+    },
+  ]);
+}
+
+/** Store-wide approved review count and average, for the section's eyebrow. */
+export async function overallRating() {
+  const [result] = await ReviewModel.aggregate<{ avg: number; count: number }>([
+    { $match: { status: "APPROVED" } },
+    { $group: { _id: null, avg: { $avg: "$rating" }, count: { $sum: 1 } } },
+  ]);
+
+  return {
+    ratingAvg: result ? Math.round(result.avg * 10) / 10 : 0,
+    ratingCount: result?.count ?? 0,
+  };
 }
 
 export async function reply(id: string, body: string, repliedBy: string) {

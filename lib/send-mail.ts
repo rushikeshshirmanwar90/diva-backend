@@ -118,15 +118,21 @@ function esc(value: string): string {
 
 export function otpEmail(name: string, otp: string): MailBody {
   return {
-    subject: "Your DIVA verification code",
+    subject: `${otp} is your DIVA verification code`,
     html: shell(`
       <h2 style="margin:0 0 16px;font-size:20px;font-weight:normal">Verify your email</h2>
       <p>Dear ${esc(name)},</p>
-      <p>Use this code to confirm your email address:</p>
-      <p style="font-size:34px;font-weight:600;letter-spacing:10px;color:${GOLD};margin:22px 0;font-family:Helvetica,Arial,sans-serif">${esc(otp)}</p>
+      <p>Enter this code in the app or on the website to confirm your address:</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0">
+        <tr><td style="background:${BEIGE};border:1px solid #E8E2D8;padding:22px;text-align:center">
+          <div style="font-size:11px;letter-spacing:3px;color:${MUTED};text-transform:uppercase;font-family:Helvetica,Arial,sans-serif">Verification code</div>
+          <div style="font-size:36px;font-weight:600;letter-spacing:10px;color:${CHARCOAL};margin:10px 0 6px;font-family:Helvetica,Arial,sans-serif">${esc(otp)}</div>
+          <div style="font-size:12px;color:${MUTED}">Valid for 15 minutes</div>
+        </td></tr>
+      </table>
       <p style="color:${MUTED};font-size:13px">
-        The code expires in 15 minutes. If you did not create a DIVA account,
-        you can safely ignore this email.
+        If you did not create a DIVA account, you can safely ignore this email —
+        nothing happens without the code.
       </p>
     `),
   };

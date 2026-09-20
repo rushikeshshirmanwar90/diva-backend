@@ -286,7 +286,9 @@ export async function loginWithGoogle(
   try {
     const ticket = await getGoogleClient(config.clientId).verifyIdToken({
       idToken: input.idToken,
-      audience: config.clientId,
+      // The website's token says `aud: <web id>`; the app's says the iOS or
+      // Android id. Any of ours is proof the token was issued for this product.
+      audience: config.audiences,
     });
     payload = ticket.getPayload();
   } catch {
