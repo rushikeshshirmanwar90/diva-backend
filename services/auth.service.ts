@@ -10,6 +10,8 @@ import {
   hashOtp,
   generateResetToken,
   hashResetToken,
+  generateDeletionToken,
+  hashDeletionToken,
   safeEqual,
 } from "@/lib/auth/tokens";
 import { isStaffRole } from "@/lib/auth/rbac";
@@ -17,7 +19,7 @@ import type { Audience } from "@/lib/auth/cookies";
 import * as users from "@/repositories/user.repository";
 import * as refreshTokens from "@/repositories/refreshToken.repository";
 import { queueMail, sendMailNow } from "@/lib/send-mail";
-import { otpEmail, welcomeEmail, passwordResetEmail } from "@/lib/send-mail";
+import { otpEmail, welcomeEmail, passwordResetEmail, accountDeletionEmail } from "@/lib/send-mail";
 import { env, googleAuthConfig } from "@/config/env";
 import { OAuth2Client } from "google-auth-library";
 import type { RegisterInput, LoginInput, GoogleLoginInput } from "@/validators/auth";
@@ -36,6 +38,7 @@ import type { Role } from "@/models/enums";
 const OTP_TTL_MINUTES = 15;
 const OTP_MAX_ATTEMPTS = 5;
 const RESET_TTL_MINUTES = 30;
+const DELETION_TTL_MINUTES = 30;
 
 export type SessionTokens = {
   accessToken: string;
@@ -543,4 +546,71 @@ export async function updateProfile(
   if (!updated) throw ApiError.notFound("Account not found");
 
   return getProfile(userId);
+}
+
+/**
+ * Self-service account deletion, requested by the account holder rather than
+ * an admin.
+ *
+ * Restricted to customer accounts: staff are onboarded by an admin, not the
+ * public register flow, and letting one delete their own access from the
+ * storefront session would be a strange way to lose an admin account.
+ *
+ * `softDelete` marks the record deleted and bumps `tokenVersion`, which is
+ * what actually revokes the session's still-live access token; revoking the
+ * refresh tokens on top of that stops it from being renewed.
+ */
+export async function deleteAccount(userId: string) {
+  const user = await users.findById(userId);
+  if (!user) throw ApiError.notFound("Account not found");
+
+  if (user.role !== "customer") {
+    throw ApiError.forbidden(
+      "Staff accounts cannot be self-deleted. Ask an administrator to remove it.",
+    );
+  }
+
+  await users.softDelete(userId);
+  await refreshTokens.revokeAllForUser(userId, "LOGOUT");
+
+  return { deleted: true };
+}
+
+/**
+ * Public, no-session account-deletion request — the flow behind the
+ * "delete my account" page linked from the app store listings.
+ *
+ * Requires clicking a link out of email, the same reason `forgotPassword`
+ * requires it and not just a password: without that, anyone who knows or
+ * guesses someone else's address could delete their account by typing it into
+ * a form. And per the class comment at the top of this file, the response is
+ * identical whether or not the address is registered.
+ */
+export async function requestAccountDeletion(email: string) {
+  const user = await users.findByEmail(email);
+
+  if (user && user.isActive && !user.deletedAt && user.role === "customer") {
+    const { token, tokenHash } = generateDeletionToken();
+    const expiresAt = new Date(Date.now() + DELETION_TTL_MINUTES * 60 * 1000);
+
+    await users.setDeletionToken(String(user._id), tokenHash, expiresAt);
+
+    const confirmUrl = `${env.STOREFRONT_URL}/delete-account/confirm?token=${token}`;
+    queueMail({ to: user.email, ...accountDeletionEmail(user.name, confirmUrl) });
+  }
+
+  return { requested: true };
+}
+
+export async function confirmAccountDeletion(token: string) {
+  const user = await users.findByDeletionToken(hashDeletionToken(token));
+
+  if (!user) {
+    throw ApiError.badRequest("This deletion link is invalid or has expired.");
+  }
+
+  await users.softDelete(String(user._id));
+  await refreshTokens.revokeAllForUser(String(user._id), "LOGOUT");
+
+  return { deleted: true };
 }

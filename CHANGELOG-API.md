@@ -17,6 +17,20 @@ field or a new enum member is not breaking.
 
 ## Unreleased
 
+### 2026-09-24 — Public account-deletion request flow
+
+Additive.
+
+- **Added** `POST /auth/request-account-deletion` — body `{ email }`, no session required. If a matching, active customer account exists, emails a confirmation link valid for 30 minutes; responds `{ requested: true }` identically either way (same anti-enumeration shape as `forgot-password`).
+- **Added** `POST /auth/confirm-account-deletion` — body `{ token }` from the emailed link. Soft-deletes the account, revokes every refresh token, and signs it out everywhere. `400` if the token is invalid, already used, or expired. Response `{ deleted: true }`.
+- Backs the public "delete my account" page (`/delete-account` on the storefront), the URL app-store listings can point at for account-deletion requests.
+
+### 2026-09-24 — Self-service account deletion
+
+Additive.
+
+- **Added** `DELETE /auth/delete-account` — soft-deletes the signed-in customer's own account, revokes every refresh token and clears session cookies. Storefront/app auth session required; staff accounts get 403 and must be removed by an admin instead. Response `{ deleted: true }`.
+
 ### 2026-09-19 — Product listing carries attributes
 
 Additive.

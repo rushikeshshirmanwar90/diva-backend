@@ -151,6 +151,23 @@ export async function setResetToken(id: string, tokenHash: string, expiresAt: Da
   );
 }
 
+export async function findByDeletionToken(tokenHash: string) {
+  return UserModel.findOne({
+    deletionTokenHash: tokenHash,
+    deletionTokenExpiresAt: { $gt: new Date() },
+    ...notDeleted,
+  })
+    .select("+deletionTokenHash +deletionTokenExpiresAt")
+    .lean();
+}
+
+export async function setDeletionToken(id: string, tokenHash: string, expiresAt: Date) {
+  await UserModel.updateOne(
+    { _id: id },
+    { $set: { deletionTokenHash: tokenHash, deletionTokenExpiresAt: expiresAt } },
+  );
+}
+
 export async function recordLogin(id: string) {
   await UserModel.updateOne({ _id: id }, { $set: { lastLoginAt: new Date() } });
 }

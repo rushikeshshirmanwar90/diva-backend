@@ -94,6 +94,14 @@ export const resetPasswordSchema = z
   })
   .strict();
 
+export const requestAccountDeletionSchema = z.object({ email }).strict();
+
+export const confirmAccountDeletionSchema = z
+  .object({
+    token: z.string().min(20, "Invalid deletion link"),
+  })
+  .strict();
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1).max(128),

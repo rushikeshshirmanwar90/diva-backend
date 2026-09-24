@@ -159,6 +159,21 @@ export function hashResetToken(token: string): string {
 }
 
 /**
+ * Account-deletion confirmation token: goes in the emailed link from the
+ * public "delete my account" page, stored hashed. Its own function for the
+ * same reason as `hashResetToken` — a reset token and a deletion token must
+ * never become interchangeable just because both happen to hash the same way.
+ */
+export function generateDeletionToken(): { token: string; tokenHash: string } {
+  const token = randomBytes(32).toString("base64url");
+  return { token, tokenHash: hashDeletionToken(token) };
+}
+
+export function hashDeletionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/**
  * Constant-time comparison for secrets.
  *
  * `a === b` on strings short-circuits at the first differing byte, so how long

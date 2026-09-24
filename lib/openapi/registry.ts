@@ -12,6 +12,8 @@ import {
   resendOtpSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  requestAccountDeletionSchema,
+  confirmAccountDeletionSchema,
   changePasswordSchema,
   refreshSchema,
   updateProfileSchema,
@@ -187,6 +189,18 @@ const authPaths: [string, string, z.ZodType, string][] = [
   ["/auth/refresh", "post", refreshSchema, "Rotate the refresh token"],
   ["/auth/forgot-password", "post", forgotPasswordSchema, "Send a password-reset link"],
   ["/auth/reset-password", "post", resetPasswordSchema, "Set a new password from a reset link"],
+  [
+    "/auth/request-account-deletion",
+    "post",
+    requestAccountDeletionSchema,
+    "Send an account-deletion confirmation link (no session required)",
+  ],
+  [
+    "/auth/confirm-account-deletion",
+    "post",
+    confirmAccountDeletionSchema,
+    "Confirm and permanently delete the account named by the emailed link",
+  ],
 ];
 
 for (const [path, method, schema, summary] of authPaths) {
@@ -227,6 +241,15 @@ registry.registerPath({
   security: [{ bearerAuth: [] }, { cookieAuth: [] }],
   request: jsonBody(updateProfileSchema),
   responses: { ...okResponse("Updated profile"), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/auth/delete-account",
+  tags: ["Auth"],
+  summary: "Permanently delete the signed-in customer's account",
+  security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+  responses: { ...okResponse("Account deleted"), ...errorResponses },
 });
 
 // Catalogue

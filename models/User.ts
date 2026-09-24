@@ -41,6 +41,9 @@ export interface UserDocument {
   otpAttempts: number;
   passwordResetTokenHash?: string;
   passwordResetExpiresAt?: Date;
+  /** Set by the public "delete my account" page, cleared once used or replaced. */
+  deletionTokenHash?: string;
+  deletionTokenExpiresAt?: Date;
   marketingOptIn: boolean;
   deletedAt?: Date | null;
   createdAt: Date;
@@ -99,6 +102,9 @@ const userSchema = new mongoose.Schema<UserDocument>(
 
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
+
+    deletionTokenHash: { type: String, select: false },
+    deletionTokenExpiresAt: { type: Date, select: false },
 
     marketingOptIn: { type: Boolean, default: false },
 

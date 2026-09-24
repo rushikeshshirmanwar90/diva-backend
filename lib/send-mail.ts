@@ -168,6 +168,29 @@ export function passwordResetEmail(name: string, resetUrl: string): MailBody {
   };
 }
 
+export function accountDeletionEmail(name: string, confirmUrl: string): MailBody {
+  return {
+    subject: "Confirm deleting your DIVA account",
+    html: shell(`
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:normal">Delete your account?</h2>
+      <p>Dear ${esc(name)},</p>
+      <p>Someone requested to permanently delete the DIVA account registered to
+      this address. Click below to confirm. The link is valid for 30 minutes
+      and can be used once.</p>
+      ${button("Permanently delete my account", confirmUrl)}
+      <p style="color:${MUTED};font-size:13px">
+        This closes your account and signs you out everywhere. Order and
+        invoice records are kept as long as Indian tax law requires; everything
+        else tied to your account is removed.
+      </p>
+      <p style="color:${MUTED};font-size:13px">
+        If you did not request this, no action is needed — your account is safe
+        and nothing happens without this link being opened and confirmed.
+      </p>
+    `),
+  };
+}
+
 export function orderConfirmationEmail(input: {
   name: string;
   orderNumber: string;
