@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { ApiError } from "@/lib/api/errors";
-import { phonePeConfig, isProduction } from "@/config/env";
+import { phonePeConfig, phonePeLegacyConfig, isProduction } from "@/config/env";
 import type { PaymentStatus } from "@/models/enums";
 
 /**
@@ -323,12 +323,100 @@ export type GatewayStatus = {
  * come from PhonePe directly.
  */
 export async function fetchOrderStatus(merchantOrderId: string): Promise<GatewayStatus> {
-  const payload = await authedFetch(
-    `/checkout/v2/order/${encodeURIComponent(merchantOrderId)}/status?details=true`,
-    { method: "GET" },
-  );
+  const oauthConfig = phonePeConfig();
+  if (oauthConfig) {
+    try {
+      const payload = await authedFetch(
+        `/checkout/v2/order/${encodeURIComponent(merchantOrderId)}/status?details=true`,
+        { method: "GET" },
+      );
+      return parseStatusPayload(payload);
+    } catch (err) {
+      // If order was initiated via legacy flow or v2 fails, fallback to legacy if configured
+      const legacy = phonePeLegacyConfig();
+      if (!legacy) throw err;
+      return fetchOrderStatusLegacy(merchantOrderId);
+    }
+  }
 
-  return parseStatusPayload(payload);
+  const legacy = phonePeLegacyConfig();
+  if (legacy) {
+    return fetchOrderStatusLegacy(merchantOrderId);
+  }
+
+  throw ApiError.serviceUnavailable("PhonePe payment is not configured on this server.");
+}
+
+/**
+ * Checks payment status using PhonePe v1 legacy API with X-VERIFY checksum.
+ * Used for mobile SDK transactions.
+ */
+export async function fetchOrderStatusLegacy(merchantOrderId: string): Promise<GatewayStatus> {
+  const legacy = phonePeLegacyConfig();
+  if (!legacy) {
+    throw ApiError.serviceUnavailable("PhonePe legacy payment configuration is missing.");
+  }
+
+  const endpoint = `/pg/v1/status/${legacy.merchantId}/${encodeURIComponent(merchantOrderId)}`;
+  const stringToHash = `${endpoint}${legacy.saltKey}`;
+  const sha256 = createHash("sha256").update(stringToHash).digest("hex");
+  const checksum = `${sha256}###${legacy.saltIndex}`;
+
+  const host =
+    legacy.environment === "PRODUCTION"
+      ? "https://api.phonepe.com/apis/pg"
+      : "https://api-preprod.phonepe.com/apis/pg-sandbox";
+
+  const response = await fetch(`${host}${endpoint}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-VERIFY": checksum,
+      "X-MERCHANT-ID": legacy.merchantId,
+    },
+    cache: "no-store",
+  });
+
+  const payload = (await safeJson(response)) as {
+    success?: boolean;
+    code?: string;
+    message?: string;
+    data?: {
+      merchantId?: string;
+      merchantTransactionId?: string;
+      transactionId?: string;
+      amount?: number;
+      state?: string;
+      responseCode?: string;
+      paymentInstrument?: { type?: string };
+    };
+  };
+
+  const state = payload.data?.state || (payload.success ? "COMPLETED" : "FAILED");
+  const code = payload.code || payload.data?.responseCode;
+  let status: PaymentStatus = "PENDING";
+  if (code === "PAYMENT_SUCCESS" || state === "COMPLETED") {
+    status = "SUCCESS";
+  } else if (
+    code === "PAYMENT_ERROR" ||
+    code === "PAYMENT_DECLINED" ||
+    code === "TIMED_OUT" ||
+    state === "FAILED"
+  ) {
+    status = "FAILED";
+  }
+
+  return {
+    gatewayOrderId: payload.data?.transactionId,
+    state,
+    status,
+    amountPaise: payload.data?.amount,
+    instrument: payload.data?.paymentInstrument?.type,
+    transactionId: payload.data?.transactionId,
+    errorCode: code,
+    errorMessage: payload.message,
+    raw: payload,
+  };
 }
 
 /** Shared by the status call and the webhook, which carry the same shape. */

@@ -267,6 +267,27 @@ export function phonePeConfig() {
   };
 }
 
+/**
+ * Legacy PhonePe v1 credentials, for the native mobile SDK.
+ *
+ * The `react-native-phonepe-pg` SDK uses the old X-VERIFY checksum flow, not
+ * the v2 OAuth. Both coexist: the website uses v2, the mobile app uses v1.
+ * Returns `null` when unconfigured so the endpoint answers 503 rather than
+ * crashing on a missing salt key.
+ */
+export function phonePeLegacyConfig() {
+  const { PHONEPE_MERCHANT_ID, PHONEPE_SALT_KEY, SALT_ID } = env;
+
+  if (!PHONEPE_MERCHANT_ID || !PHONEPE_SALT_KEY) return null;
+
+  return {
+    merchantId: PHONEPE_MERCHANT_ID,
+    saltKey: PHONEPE_SALT_KEY,
+    saltIndex: SALT_ID ?? "1",
+    environment: env.PHONEPE_ENV,
+  };
+}
+
 /** Google Sign-In credentials, or `null` when the integration is not provisioned. */
 export function googleAuthConfig() {
   const { GOOGLE_CLIENT_ID, GOOGLE_MOBILE_CLIENT_IDS } = env;

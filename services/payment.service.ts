@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import mongoose from "mongoose";
 import { ApiError } from "@/lib/api/errors";
-import { env } from "@/config/env";
+import { env, phonePeLegacyConfig } from "@/config/env";
 import { isOriginAllowed } from "@/lib/http/cors";
 import * as phonepe from "@/lib/payments/phonepe";
 import { getStoreSettings } from "@/lib/settings";
@@ -157,6 +157,114 @@ export async function initiatePayment(
     redirectUrl: initiated.redirectUrl,
     orderNumber: order.orderNumber,
     amountPaise,
+  };
+}
+
+export type InitiateSDKResult = {
+  merchantId: string;
+  merchantTransactionId: string;
+  orderNumber: string;
+  amountPaise: number;
+  base64Body: string;
+  checksum: string;
+  environment: "SANDBOX" | "PRODUCTION";
+};
+
+/**
+ * Initiates payment via PhonePe's native mobile SDK (react-native-phonepe-pg).
+ *
+ * Generates the base64-encoded request payload and SHA256 X-VERIFY checksum
+ * expected by PhonePePaymentSDK.startTransaction().
+ */
+export async function initiatePaymentSDK(
+  orderNumber: string,
+  actor: { userId: string },
+): Promise<InitiateSDKResult> {
+  const config = phonePeLegacyConfig();
+  if (!config) {
+    throw ApiError.serviceUnavailable(
+      "PhonePe mobile payment is not configured on this server.",
+    );
+  }
+
+  const order = await orders.findOwnedByNumber(orderNumber, actor.userId);
+  if (!order) throw ApiError.notFound("We could not find that order.");
+
+  if (order.paymentMethod === "COD") {
+    throw ApiError.conflict(
+      "This order is cash on delivery — there is nothing to pay online.",
+    );
+  }
+
+  if (order.status !== "PENDING" && order.status !== "PAYMENT_FAILED") {
+    throw ApiError.conflict(
+      order.status === "PAYMENT_SUCCESS" || order.status === "CONFIRMED"
+        ? "This order has already been paid for."
+        : "This order can no longer be paid for. Please start a new order.",
+    );
+  }
+
+  if (order.reservationExpiresAt && order.reservationExpiresAt < new Date()) {
+    throw ApiError.conflict(
+      "The price hold on this order has expired. Please place it again to get the current rate.",
+    );
+  }
+
+  if (order.status === "PAYMENT_FAILED") {
+    const settings = await getStoreSettings();
+    await reReserveOrderStock(order);
+    await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_FAILED", {
+      note: "Stock re-held for payment retry",
+      set: {
+        reservationExpiresAt: new Date(Date.now() + settings.pricing.priceLockMinutes * 60_000),
+      },
+    });
+  }
+
+  const merchantTransactionId = buildTransactionId(order.orderNumber);
+  const amountPaise = order.totals.grandTotalPaise;
+
+  const payment = await payments.create({
+    orderId: order._id,
+    userId: new mongoose.Types.ObjectId(actor.userId),
+    merchantTransactionId,
+    method: "PHONEPE",
+    status: "INITIATED",
+    amountPaise,
+    initiatedAt: new Date(),
+  });
+
+  await orders.attachPayment(order._id, payment._id);
+
+  await orders.transition(order._id, "PAYMENT_INITIATED", ["PENDING", "PAYMENT_FAILED"], {
+    note: `Payment initiated via Mobile SDK (${merchantTransactionId})`,
+  });
+
+  const payload = {
+    merchantId: config.merchantId,
+    merchantTransactionId,
+    merchantUserId: actor.userId,
+    amount: amountPaise,
+    callbackUrl: `${env.STOREFRONT_URL}/api/v1/payments/phonepe/webhook`,
+    mobileNumber: order.shippingAddress?.phone || undefined,
+    paymentInstrument: {
+      type: "PAY_PAGE",
+    },
+  };
+
+  const base64Body = Buffer.from(JSON.stringify(payload)).toString("base64");
+  const stringToHash = `${base64Body}/pg/v1/pay${config.saltKey}`;
+  const sha256 = createHash("sha256").update(stringToHash).digest("hex");
+  const checksum = `${sha256}###${config.saltIndex}`;
+
+  return {
+    merchantId: config.merchantId,
+    merchantTransactionId,
+    orderNumber: order.orderNumber,
+    amountPaise,
+    base64Body,
+    checksum,
+    environment: config.environment,
   };
 }
 
