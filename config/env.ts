@@ -276,14 +276,16 @@ export function phonePeConfig() {
  * crashing on a missing salt key.
  */
 export function phonePeLegacyConfig() {
-  const { PHONEPE_MERCHANT_ID, PHONEPE_SALT_KEY, SALT_ID } = env;
+  const merchantId = env.PHONEPE_MERCHANT_ID || env.PHONEPE_CLIENT_ID;
+  const saltKey = env.PHONEPE_SALT_KEY || env.PHONEPE_CLIENT_SECRET;
+  const saltIndex = env.SALT_ID ?? "1";
 
-  if (!PHONEPE_MERCHANT_ID || !PHONEPE_SALT_KEY) return null;
+  if (!merchantId || !saltKey) return null;
 
   return {
-    merchantId: PHONEPE_MERCHANT_ID,
-    saltKey: PHONEPE_SALT_KEY,
-    saltIndex: SALT_ID ?? "1",
+    merchantId,
+    saltKey,
+    saltIndex,
     environment: env.PHONEPE_ENV,
   };
 }
