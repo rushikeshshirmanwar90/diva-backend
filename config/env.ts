@@ -1,38 +1,13 @@
 import { z } from "zod";
 
-/**
- * Environment contract for the backend.
- *
- * Parsed once, at module load. A missing or malformed variable throws here and
- * the process never finishes booting — which is deliberate. A server that
- * starts without a database URL and only fails on the first customer request is
- * strictly worse than one that refuses to start at all.
- *
- * Variable names follow the `.env` file that already exists in this project
- * (`DB_URL`, `JWT_SECRET`, `SMTP_PASS`, …) rather than inventing new ones — a
- * config file and its schema disagreeing is a boot failure nobody enjoys
- * debugging.
- *
- * Integrations that are not wired up yet (Cloudinary, PhonePe, Shiprocket) are
- * optional here so local development is not blocked. The modules that consume
- * them assert presence at point of use, via `cloudinaryConfig()` and friends,
- * so a missing key surfaces as a clear 503 on one endpoint rather than a crash
- * on boot.
- */
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
-  /** Public origin of this backend. Used to build absolute callback URLs. */
   APP_URL: z.url().default("http://localhost:4000"),
 
   /** Public origin of the customer storefront (`diva-frontend`). */
   STOREFRONT_URL: z.url().default("http://localhost:3000"),
 
-  /**
-   * Origins permitted to send credentialed cross-origin requests.
-   * Comma-separated. Never `*` — see lib/http/cors.ts for why that silently
-   * breaks the moment credentials are involved.
-   */
   CORS_ALLOWED_ORIGINS: z
     .string()
     .default("http://localhost:3000,http://localhost:4000,http://localhost:8081")
@@ -237,7 +212,7 @@ function loadEnv(): Env {
 
     throw new Error(
       `Invalid environment configuration:\n${issues}\n\n` +
-        `Copy .env.example to .env and fill in the missing values.`,
+      `Copy .env.example to .env and fill in the missing values.`,
     );
   }
 
