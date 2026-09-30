@@ -271,13 +271,17 @@ export function phonePeConfig() {
  * Legacy PhonePe v1 credentials, for the native mobile SDK.
  *
  * The `react-native-phonepe-pg` SDK uses the old X-VERIFY checksum flow, not
- * the v2 OAuth. Both coexist: the website uses v2, the mobile app uses v1.
+ * the v2 OAuth, and only works on a merchant account provisioned for v1. Both
+ * storefronts now use v2, so this stays null unless the v1 pair is set.
  * Returns `null` when unconfigured so the endpoint answers 503 rather than
  * crashing on a missing salt key.
  */
 export function phonePeLegacyConfig() {
-  const merchantId = env.PHONEPE_MERCHANT_ID || env.PHONEPE_CLIENT_ID;
-  const saltKey = env.PHONEPE_SALT_KEY || env.PHONEPE_CLIENT_SECRET;
+  // Not borrowed from the v2 OAuth pair: a v1 merchantId is not a clientId and
+  // a saltKey is not a client secret. Defaulting to them made this config
+  // always-present, silently enabling the v1 path on a v2-only account.
+  const merchantId = env.PHONEPE_MERCHANT_ID;
+  const saltKey = env.PHONEPE_SALT_KEY;
   const saltIndex = env.SALT_ID ?? "1";
 
   if (!merchantId || !saltKey) return null;

@@ -323,26 +323,18 @@ export type GatewayStatus = {
  * come from PhonePe directly.
  */
 export async function fetchOrderStatus(merchantOrderId: string): Promise<GatewayStatus> {
-  const oauthConfig = phonePeConfig();
-  if (oauthConfig) {
-    try {
-      const payload = await authedFetch(
-        `/checkout/v2/order/${encodeURIComponent(merchantOrderId)}/status?details=true`,
-        { method: "GET" },
-      );
-      return parseStatusPayload(payload);
-    } catch (err) {
-      // If order was initiated via legacy flow or v2 fails, fallback to legacy if configured
-      const legacy = phonePeLegacyConfig();
-      if (!legacy) throw err;
-      return fetchOrderStatusLegacy(merchantOrderId);
-    }
+  // Never fall back across API versions. A v2 order has no v1 record, so a v1
+  // lookup answers "Api Mapping Not Found", which parses as FAILED and settles
+  // a live payment as failed. An errored status check must throw, not decide.
+  if (phonePeConfig()) {
+    const payload = await authedFetch(
+      `/checkout/v2/order/${encodeURIComponent(merchantOrderId)}/status?details=true`,
+      { method: "GET" },
+    );
+    return parseStatusPayload(payload);
   }
 
-  const legacy = phonePeLegacyConfig();
-  if (legacy) {
-    return fetchOrderStatusLegacy(merchantOrderId);
-  }
+  if (phonePeLegacyConfig()) return fetchOrderStatusLegacy(merchantOrderId);
 
   throw ApiError.serviceUnavailable("PhonePe payment is not configured on this server.");
 }
