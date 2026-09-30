@@ -8,8 +8,9 @@ import { requireAuth } from "@/lib/auth/session";
 /**
  * `POST /api/v1/payments/phonepe/initiate-sdk`
  *
- * Returns `{ merchantId, merchantTransactionId, base64Body, checksum, environment }`
- * for the React Native PhonePe SDK (react-native-phonepe-pg) startTransaction() flow.
+ * Returns `{ merchantId, orderId, token, merchantTransactionId, environment }`
+ * for react-native-phonepe-pg startTransaction(). Mobile uses this instead of
+ * `/initiate`, whose hosted page cannot deep-link into installed UPI apps.
  */
 export const POST = route(async ({ request }) => {
   const principal = await requireAuth(request);

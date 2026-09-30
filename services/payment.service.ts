@@ -1,7 +1,7 @@
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import { ApiError } from "@/lib/api/errors";
-import { env, phonePeLegacyConfig } from "@/config/env";
+import { env } from "@/config/env";
 import { isOriginAllowed } from "@/lib/http/cors";
 import * as phonepe from "@/lib/payments/phonepe";
 import { getStoreSettings } from "@/lib/settings";
@@ -165,23 +165,28 @@ export type InitiateSDKResult = {
   merchantTransactionId: string;
   orderNumber: string;
   amountPaise: number;
-  base64Body: string;
-  checksum: string;
+  /** PhonePe's order id and the token the SDK consumes, from the same response. */
+  orderId: string;
+  token: string;
   environment: "SANDBOX" | "PRODUCTION";
 };
 
 /**
- * Initiates payment via PhonePe's native mobile SDK (react-native-phonepe-pg).
+ * Starts a payment for the mobile app, which drives PhonePe's native SDK.
  *
- * Generates the base64-encoded request payload and SHA256 X-VERIFY checksum
- * expected by PhonePePaymentSDK.startTransaction().
+ * Everything after the handoff is shared with `initiatePayment`: same v2
+ * product, same `merchantTransactionId`, so status lookups, the webhook and
+ * refunds need no mobile-specific branch. Only the handoff differs — the app
+ * receives an order token for `startTransaction` rather than a URL, because
+ * PhonePe's hosted page cannot deep-link into installed UPI apps from a
+ * browser and falls back to a QR code the customer has no second device to scan.
  */
 export async function initiatePaymentSDK(
   orderNumber: string,
   actor: { userId: string },
 ): Promise<InitiateSDKResult> {
-  const config = phonePeLegacyConfig();
-  if (!config) {
+  const merchantId = env.PHONEPE_MERCHANT_ID;
+  if (!merchantId) {
     throw ApiError.serviceUnavailable(
       "PhonePe mobile payment is not configured on this server.",
     );
@@ -236,35 +241,29 @@ export async function initiatePaymentSDK(
 
   await orders.attachPayment(order._id, payment._id);
 
-  await orders.transition(order._id, "PAYMENT_INITIATED", ["PENDING", "PAYMENT_FAILED"], {
-    note: `Payment initiated via Mobile SDK (${merchantTransactionId})`,
+  const sdkOrder = await phonepe.createSdkOrder({
+    merchantOrderId: merchantTransactionId,
+    amountPaise,
+    // Unused by this flow — the SDK returns through the app, not a browser —
+    // but the shared input type carries it.
+    redirectUrl: `${env.STOREFRONT_URL}/checkout/payment-return?ref=${merchantTransactionId}`,
+    message: `Diva order ${order.orderNumber}`,
+    metaInfo: { udf1: order.orderNumber },
   });
 
-  const payload = {
-    merchantId: config.merchantId,
-    merchantTransactionId,
-    merchantUserId: actor.userId,
-    amount: amountPaise,
-    callbackUrl: `${env.STOREFRONT_URL}/api/v1/payments/phonepe/webhook`,
-    mobileNumber: order.shippingAddress?.phone || undefined,
-    paymentInstrument: {
-      type: "PAY_PAGE",
-    },
-  };
-
-  const base64Body = Buffer.from(JSON.stringify(payload)).toString("base64");
-  const stringToHash = `${base64Body}/pg/v1/pay${config.saltKey}`;
-  const sha256 = createHash("sha256").update(stringToHash).digest("hex");
-  const checksum = `${sha256}###${config.saltIndex}`;
+  // Only after the gateway accepts, for the reason given in `initiatePayment`.
+  await orders.transition(order._id, "PAYMENT_INITIATED", ["PENDING", "PAYMENT_FAILED"], {
+    note: `Payment initiated via mobile SDK (${merchantTransactionId})`,
+  });
 
   return {
-    merchantId: config.merchantId,
+    merchantId,
     merchantTransactionId,
     orderNumber: order.orderNumber,
     amountPaise,
-    base64Body,
-    checksum,
-    environment: config.environment,
+    orderId: sdkOrder.gatewayOrderId,
+    token: sdkOrder.token,
+    environment: env.PHONEPE_ENV,
   };
 }
 

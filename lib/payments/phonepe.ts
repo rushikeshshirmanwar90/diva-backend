@@ -293,6 +293,60 @@ export async function initiatePayment(input: InitiateInput): Promise<InitiateRes
   };
 }
 
+/**
+ * Creates an order for the **mobile SDK** flow.
+ *
+ * Same v2 product and same `merchantOrderId` as `initiatePayment`, so status
+ * lookups, the webhook and refunds are all unchanged. The difference is what
+ * comes back: a `token` the app hands to `startTransaction`, instead of a
+ * `redirectUrl` for a browser. A phone needs this path because the hosted page
+ * cannot deep-link into installed UPI apps — it can only offer a QR to scan.
+ */
+export type SdkOrderResult = {
+  gatewayOrderId: string;
+  token: string;
+  state: string;
+  expireAtMs?: number;
+};
+
+export async function createSdkOrder(input: InitiateInput): Promise<SdkOrderResult> {
+  if (!Number.isInteger(input.amountPaise) || input.amountPaise < 100) {
+    throw ApiError.badRequest("The payable amount is too small to process.");
+  }
+
+  const payload = await authedFetch("/checkout/v2/sdk/order", {
+    method: "POST",
+    body: {
+      merchantOrderId: input.merchantOrderId,
+      amount: input.amountPaise,
+      expireAfter: input.expireAfterSeconds ?? 1200,
+      ...(input.metaInfo ? { metaInfo: input.metaInfo } : {}),
+      paymentFlow: { type: "PG_CHECKOUT" },
+    },
+  });
+
+  const result = payload as {
+    orderId?: string;
+    state?: string;
+    token?: string;
+    expireAt?: number;
+  };
+
+  if (!result.token || !result.orderId) {
+    throw ApiError.serviceUnavailable(
+      "The payment gateway did not return a payment token. Please try again.",
+      new Error(`PhonePe sdk/order response missing token/orderId: ${JSON.stringify(payload)}`),
+    );
+  }
+
+  return {
+    gatewayOrderId: result.orderId,
+    token: result.token,
+    state: result.state ?? "PENDING",
+    expireAtMs: result.expireAt,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------------------
