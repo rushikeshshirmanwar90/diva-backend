@@ -125,9 +125,9 @@ const envSchema = z.object({
   // --- Payments: PhonePe Standard Checkout v2 -----------------------------
   /**
    * Standard Checkout v2 authenticates with OAuth, not the legacy `X-VERIFY`
-   * checksum. `PHONEPE_MERCHANT_ID` and `PHONEPE_SALT_KEY` below belong to the
-   * old flow and are kept only so an existing `.env` still parses — nothing
-   * reads them. Delete them once the migration is confirmed complete.
+   * checksum. `PHONEPE_SALT_KEY` below belongs to the old flow and is kept only
+   * so an existing `.env` still parses. `PHONEPE_MERCHANT_ID` is still needed:
+   * the mobile app's native SDK is initialised with it (`initiatePaymentSDK`).
    */
   PHONEPE_CLIENT_ID: z.string().optional(),
   PHONEPE_CLIENT_SECRET: z.string().optional(),
@@ -151,7 +151,7 @@ const envSchema = z.object({
 
   PHONEPE_ENV: z.enum(["SANDBOX", "PRODUCTION"]).default("SANDBOX"),
 
-  /** Legacy v1 credentials. Unused — see the note above. */
+  /** Required by `POST /payments/phonepe/initiate-sdk` (mobile app) — see above. */
   PHONEPE_MERCHANT_ID: z.string().optional(),
   PHONEPE_SALT_KEY: z.string().optional(),
   SALT_ID: z.string().optional(),
