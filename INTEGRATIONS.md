@@ -95,6 +95,14 @@ The webhook must be publicly reachable. For local testing, tunnel it —
    more** — the URL is fully under their control. It polls
    `/api/v1/payments/phonepe/status/:id`, which re-reads the outcome from
    PhonePe.
+4. The mobile app (it sends `X-Client: mobile`) opens PhonePe in the phone's
+   own browser, which has no website session. Its customers are returned to
+   `<STOREFRONT_URL>/app-return?ref=…` instead, always on the configured
+   `STOREFRONT_URL` and never a request `Origin`. That page makes no API calls;
+   it only links back into the app at `diva://checkout/payment-return?ref=…`.
+   The app then polls the same status endpoint with its bearer token. It also
+   polls while it sits in the background, so a customer who never taps the
+   link back is still settled.
 
 So three things can settle an order: the webhook, the status poll, and the
 reconciliation sweep. All funnel into one idempotent path.
