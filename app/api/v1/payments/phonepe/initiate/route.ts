@@ -11,6 +11,9 @@ import { requireAuth } from "@/lib/auth/session";
  * Returns `{ redirectUrl }` — send the browser there. The amount comes from the
  * stored order, never from the request, so there is nothing here for a client
  * to tamper with.
+ *
+ * The app sends `X-Client: mobile`; its customers are returned to a page that
+ * hands them back to the app rather than to the website's return page.
  */
 export const POST = route(async ({ request }) => {
   const principal = await requireAuth(request);
@@ -18,7 +21,10 @@ export const POST = route(async ({ request }) => {
   const data = await paymentService.initiatePayment(
     orderNumber,
     { userId: principal.userId },
-    { origin: request.headers.get("origin") },
+    {
+      origin: request.headers.get("origin"),
+      client: request.headers.get("x-client") === "mobile" ? "mobile" : "web",
+    },
   );
   return NextResponse.json(
     { success: true, status: 200, message: "Payment initiated successfully", data },

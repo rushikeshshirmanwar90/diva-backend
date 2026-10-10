@@ -57,7 +57,7 @@ export type InitiateResult = {
 export async function initiatePayment(
   orderNumber: string,
   actor: { userId: string },
-  context: { origin?: string | null } = {},
+  context: { origin?: string | null; client?: "mobile" | "web" } = {},
 ): Promise<InitiateResult> {
   // PhonePe returns the customer to whichever storefront sent them, not always
   // the production one — `diva-frontend` running on localhost during
@@ -67,6 +67,7 @@ export async function initiatePayment(
   // used; anything else falls back to the configured production storefront.
   const storefrontUrl =
     context.origin && isOriginAllowed(context.origin) ? context.origin : env.STOREFRONT_URL;
+  const isMobile = context.client === "mobile";
 
   const order = await orders.findOwnedByNumber(orderNumber, actor.userId);
   if (!order) throw ApiError.notFound("We could not find that order.");
@@ -138,7 +139,15 @@ export async function initiatePayment(
     amountPaise,
     // PhonePe returns the customer to the storefront, not to this API. The
     // page there polls our status endpoint; it is not itself trusted.
-    redirectUrl: `${storefrontUrl}/checkout/payment-return?ref=${merchantTransactionId}`,
+    //
+    // The app's customers pay in the phone's own browser, which holds no
+    // website session, so the website's return page could not poll for them.
+    // They go to `/app-return` instead, which only hands them back to the app
+    // to poll with its own token. That URL is always the configured
+    // storefront plus our own transaction id, never a client-supplied origin.
+    redirectUrl: isMobile
+      ? `${env.STOREFRONT_URL}/app-return?ref=${merchantTransactionId}`
+      : `${storefrontUrl}/checkout/payment-return?ref=${merchantTransactionId}`,
     message: `Diva order ${order.orderNumber}`,
     metaInfo: { udf1: order.orderNumber },
   });
