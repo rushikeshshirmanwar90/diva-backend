@@ -82,34 +82,94 @@ export const DEFAULT_POLICIES: Record<PolicySlug, { title: string; intro: string
   privacy: {
     title: "Privacy policy",
     intro:
-      "What we collect, why, and how long we keep it. Written to be read rather than to be legally impenetrable.",
+      "What personal information Diva The Indian Jewel collects through divatheindianjewel.com and the Diva app, why, who we share it with, and the choices you have. Written to be read rather than to be legally impenetrable.",
     sections: [
       {
-        heading: "What we collect",
+        heading: "Who we are",
         body: [
-          "Account details you give us: name, email, mobile, delivery addresses, and date of birth if you choose to add it.",
-          "Order and payment records: what you bought, when, and the payment reference. We never see or store your full card number, CVV or UPI PIN — those are handled entirely by PhonePe's gateway.",
-          "Usage data: pages viewed and searches run, used to improve what we show you. You can opt out of analytics cookies in the cookie banner without losing any site functionality.",
+          "Diva The Indian Jewel (“Diva”, “we”, “us”) runs the divatheindianjewel.com website and the Diva app for Android and iOS, and is responsible for the personal information described in this policy. Our contact details are at the end of this page and on our Contact page.",
         ],
       },
       {
-        heading: "Why we collect it",
+        heading: "What we collect",
         body: [
-          "To fulfil and insure your order, to handle returns and buyback, to comply with Indian tax and hallmarking record-keeping requirements, and to answer you when you contact support.",
-          "We do not sell personal data. We do not share it with advertisers.",
+          "Account details: your name, email address and mobile number, and a password, which is stored only as a one-way hash. If you sign in with Google, Google shares your name, email address and profile picture with us — never your Google password.",
+          "Addresses: the delivery and billing addresses you save or enter at checkout, with the contact phone number for each.",
+          "Orders and payments: what you bought, the amounts, any coupon used, your invoices, and the payment reference and method (for example UPI or card) returned by our payment gateway. We never see or store your card number, CVV, UPI PIN or bank login — you enter those directly with PhonePe.",
+          "Reviews you write, including any photos you attach and the name shown with them.",
+          "Your wishlist and the contents of your bag.",
+          "Product views: which product pages are viewed, with a random visitor ID kept on your device (and your account, if you are signed in). We use this to show “you may also like” suggestions and to see which pieces are popular. It does not include your IP address or a device fingerprint, and it is deleted automatically after 180 days.",
+          "Messages you send us by email, phone or WhatsApp.",
+          "Our hosting provider keeps short-lived technical logs, such as IP addresses and request times, to keep the service running and secure.",
+        ],
+      },
+      {
+        heading: "How we use it",
+        body: [
+          "To take payment for, pack, insure and deliver your order; to issue invoices; and to handle cancellations, returns, refunds and buyback.",
+          "To run your account: signing you in, verifying your email, and sending order updates and account notices by email and in the app.",
+          "To answer you when you contact us, to recommend pieces you may like, and to prevent fraud and misuse.",
+          "To meet our legal obligations, including Indian tax, GST and hallmarking record-keeping.",
+          "We do not use your information for advertising, and we do not sell it.",
+        ],
+      },
+      {
+        heading: "Who we share it with",
+        body: [
+          "PhonePe, to process your payment. They receive the order amount and reference; your payment details go to them directly, not through us.",
+          "Shiprocket and its courier partners, who receive your name, delivery address and phone number so your parcel can be delivered.",
+          "Google, only if you choose to sign in with Google.",
+          "Service providers who run our systems on our behalf: website and server hosting, our database, image hosting (Cloudinary, for product and review photos) and email delivery. They may use the data only to provide their service to us.",
+          "Government and law-enforcement authorities, where the law requires it.",
+          "We do not sell, rent or trade personal information, and we do not share it with advertisers.",
+        ],
+      },
+      {
+        heading: "Cookies and on-device storage",
+        body: [
+          "The website uses cookies only to keep you signed in and to keep sign-in secure. The website and app also store your bag, your wishlist and the random visitor ID described above on your device.",
+          "We do not use advertising cookies or third-party tracking. The Diva app does not access your location, contacts, camera or microphone.",
         ],
       },
       {
         heading: "How long we keep it",
         body: [
-          "Order and invoice records for eight years, as Indian tax law requires. Account details until you ask us to delete them. Analytics data for 14 months.",
-          "You can request a copy of everything we hold, or ask us to delete it, by writing to support@diva.com. We respond within 30 days.",
+          "Order, invoice and payment records: eight years, as Indian tax law requires — including after you delete your account.",
+          "Account details, addresses, wishlist and reviews: until you delete your account.",
+          "Product-view records: 180 days. Support messages: as long as needed to resolve your request.",
+        ],
+      },
+      {
+        heading: "Your rights and choices",
+        body: [
+          "You can see and update your name, phone number and addresses yourself under My account.",
+          "You can delete your account and the personal information linked to it from your account in the app, or on the website at divatheindianjewel.com/delete-account. We confirm the request by email and complete it within 30 days, keeping only the records the law requires us to retain.",
+          "You can also ask for a copy of the information we hold about you, ask us to correct it, or withdraw your consent, under the Digital Personal Data Protection Act, 2023. Write to us using the details below and we will respond within 30 days.",
         ],
       },
       {
         heading: "Security",
         body: [
-          "Passwords are hashed, never stored in readable form. Payment data never touches our servers. Access to customer records is role-restricted and every admin action is logged.",
+          "Everything you send us travels over an encrypted (HTTPS) connection. Passwords are hashed, never stored in readable form, and payment details never touch our servers. Access to customer records is role-restricted and every admin action is logged.",
+          "No system is perfectly secure. If a breach ever affects your personal information, we will tell you and the authorities as the law requires.",
+        ],
+      },
+      {
+        heading: "Children",
+        body: [
+          "Our website and app are meant for adults. We do not knowingly collect personal information from anyone under 18. If you believe a child has given us their information, contact us and we will delete it.",
+        ],
+      },
+      {
+        heading: "Changes to this policy",
+        body: [
+          "When this policy changes we update the date at the top of this page. If a change is significant, we will tell you by email or in the app before it takes effect.",
+        ],
+      },
+      {
+        heading: "Contact and grievances",
+        body: [
+          "Questions, requests and complaints about your personal information go to our Grievance Officer at the email address below, or by post to the registered address on our Contact page. We acknowledge complaints within 48 hours and resolve them within 30 days.",
         ],
       },
     ],
