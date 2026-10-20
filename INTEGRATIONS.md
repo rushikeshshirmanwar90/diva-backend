@@ -117,8 +117,21 @@ Point a scheduler at it every five minutes. This is what rescues orders whose
 webhook was never delivered, which is not a rare event — without it, those
 customers have paid and receive nothing until somebody notices by hand.
 
-It is staff-authenticated, so the scheduler needs a service account rather than
-an open URL.
+The same call releases stock held by checkouts that were never paid for. A
+customer who backs out of the PhonePe page or closes the app produces no
+FAILED callback (the gateway says PENDING until the order expires), so without
+the schedule those units stay out of stock indefinitely.
+
+`POST` is staff-authenticated, so a scheduler using it needs a service account.
+For Vercel Cron, set `CRON_SECRET` (16+ characters) and add to `vercel.json`:
+
+```json
+"crons": [{ "path": "/api/v1/payments/reconcile", "schedule": "*/5 * * * *" }]
+```
+
+Vercel then calls `GET` with `Authorization: Bearer <CRON_SECRET>`. Hobby plans
+only allow daily crons; on those, use an external scheduler (cron-job.org,
+GitHub Actions) sending the same header to the same `GET`.
 
 ---
 

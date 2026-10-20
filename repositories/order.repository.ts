@@ -91,6 +91,10 @@ export async function listForAdmin(options: {
  * Putting the current status in the *filter* means the database arbitrates:
  * the second update matches nothing and returns null, which the caller treats
  * as "already handled".
+ *
+ * `where` adds conditions to the same filter. The stock-hold paths use it to
+ * match on `reservationExpiresAt`, so that of two writers racing to take or
+ * release a hold, exactly one wins and only that one touches inventory.
  */
 export async function transition(
   orderId: string | Types.ObjectId,
@@ -101,12 +105,13 @@ export async function transition(
     actorId?: string;
     actorRole?: string;
     set?: Partial<OrderDocument>;
+    where?: QueryFilter<OrderDocument>;
   } = {},
 ) {
   const from = Array.isArray(expectedFrom) ? expectedFrom : [expectedFrom];
 
   return OrderModel.findOneAndUpdate(
-    { _id: orderId, status: { $in: from } },
+    { ...(event.where ?? {}), _id: orderId, status: { $in: from } },
     {
       $set: { status: to, ...(event.set ?? {}) },
       $push: {
@@ -150,6 +155,7 @@ export async function findExpiredReservations(limit = 100) {
     status: { $in: ["PENDING", "PAYMENT_INITIATED", "PAYMENT_FAILED"] },
     reservationExpiresAt: { $ne: null, $lt: new Date() },
   })
+    .sort({ reservationExpiresAt: 1 })
     .limit(limit)
     .lean();
 }

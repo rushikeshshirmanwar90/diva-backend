@@ -3,7 +3,12 @@ import { ApiError } from "@/lib/api/errors";
 import { priceProduct, PricingError } from "@/lib/pricing/engine";
 import { codPolicy, getStoreSettings, isPincodeBlocked } from "@/lib/settings";
 import { distributePaise, formatPaise, percentOf } from "@/lib/money";
-import { assertTransition, CUSTOMER_CANCELLABLE, nextStatuses } from "@/lib/orders/state-machine";
+import {
+  assertTransition,
+  CUSTOMER_CANCELLABLE,
+  nextStatuses,
+  PAID_STATUSES,
+} from "@/lib/orders/state-machine";
 import * as orders from "@/repositories/order.repository";
 import * as payments from "@/repositories/payment.repository";
 import * as products from "@/repositories/product.repository";
@@ -465,7 +470,7 @@ export async function cancelOrder(orderNumber: string, userId: string, reason?: 
     throw ApiError.conflict("This order changed while you were cancelling. Please reload.");
   }
 
-  await releaseHeldStock(order);
+  if (holdsStock(order)) await releaseHeldStock(order);
   if (order.paymentMethod === "COD") await payments.voidCod(order._id, "Cancelled by customer");
 
   void notify({
@@ -512,7 +517,7 @@ export async function cancelOrderByStaff(orderNumber: string, staffId: string, r
     throw ApiError.conflict("This order changed while it was being cancelled. Please reload.");
   }
 
-  await releaseHeldStock(order);
+  if (holdsStock(order)) await releaseHeldStock(order);
   if (order.paymentMethod === "COD") await payments.voidCod(order._id, "Cancelled by staff");
 
   void notify({
@@ -525,6 +530,18 @@ export async function cancelOrderByStaff(orderNumber: string, staffId: string, r
   });
 
   return cancelled;
+}
+
+/**
+ * Whether cancelling this order should put units back on the shelf.
+ *
+ * A paid or confirmed order has its stock sold to it. An unpaid one holds
+ * stock only while `reservationExpiresAt` is set — a failed payment already
+ * released it, and releasing again on cancel would inflate inventory past
+ * what physically exists.
+ */
+function holdsStock(order: Pick<OrderDocument, "status" | "reservationExpiresAt">): boolean {
+  return PAID_STATUSES.includes(order.status) || order.reservationExpiresAt != null;
 }
 
 /**

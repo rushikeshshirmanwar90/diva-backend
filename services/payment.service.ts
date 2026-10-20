@@ -92,23 +92,7 @@ export async function initiatePayment(
     );
   }
 
-  /**
-   * A retry after a failed payment starts with no stock held — the FAILED
-   * branch of `settleFromGateway` releases it immediately. So before sending
-   * the customer back to the gateway, the hold is taken out again; if someone
-   * else bought the last unit in between, this fails loudly here rather than
-   * letting the customer pay for something that is no longer theirs to get.
-   */
-  if (order.status === "PAYMENT_FAILED") {
-    const settings = await getStoreSettings();
-    await reReserveOrderStock(order);
-    await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_FAILED", {
-      note: "Stock re-held for payment retry",
-      set: {
-        reservationExpiresAt: new Date(Date.now() + settings.pricing.priceLockMinutes * 60_000),
-      },
-    });
-  }
+  await ensureStockHeld(order);
 
   const merchantTransactionId = buildTransactionId(order.orderNumber);
   const amountPaise = order.totals.grandTotalPaise;
@@ -134,23 +118,28 @@ export async function initiatePayment(
 
   await orders.attachPayment(order._id, payment._id);
 
-  const initiated = await phonepe.initiatePayment({
-    merchantOrderId: merchantTransactionId,
-    amountPaise,
-    // PhonePe returns the customer to the storefront, not to this API. The
-    // page there polls our status endpoint; it is not itself trusted.
-    //
-    // The app's customers pay in the phone's own browser, which holds no
-    // website session, so the website's return page could not poll for them.
-    // They go to `/app-return` instead, which only hands them back to the app
-    // to poll with its own token. That URL is always the configured
-    // storefront plus our own transaction id, never a client-supplied origin.
-    redirectUrl: isMobile
-      ? `${env.STOREFRONT_URL}/app-return?ref=${merchantTransactionId}`
-      : `${storefrontUrl}/checkout/payment-return?ref=${merchantTransactionId}`,
-    message: `Diva order ${order.orderNumber}`,
-    metaInfo: { udf1: order.orderNumber },
-  });
+  const initiated = await phonepe
+    .initiatePayment({
+      merchantOrderId: merchantTransactionId,
+      amountPaise,
+      // PhonePe returns the customer to the storefront, not to this API. The
+      // page there polls our status endpoint; it is not itself trusted.
+      //
+      // The app's customers pay in the phone's own browser, which holds no
+      // website session, so the website's return page could not poll for them.
+      // They go to `/app-return` instead, which only hands them back to the app
+      // to poll with its own token. That URL is always the configured
+      // storefront plus our own transaction id, never a client-supplied origin.
+      redirectUrl: isMobile
+        ? `${env.STOREFRONT_URL}/app-return?ref=${merchantTransactionId}`
+        : `${storefrontUrl}/checkout/payment-return?ref=${merchantTransactionId}`,
+      message: `Diva order ${order.orderNumber}`,
+      metaInfo: { udf1: order.orderNumber },
+    })
+    .catch(async (error: unknown) => {
+      await releaseUnstartedPayment(order, merchantTransactionId, error);
+      throw error;
+    });
 
   /**
    * PENDING only after the gateway has accepted the request. Ordering matters:
@@ -224,16 +213,7 @@ export async function initiatePaymentSDK(
     );
   }
 
-  if (order.status === "PAYMENT_FAILED") {
-    const settings = await getStoreSettings();
-    await reReserveOrderStock(order);
-    await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_FAILED", {
-      note: "Stock re-held for payment retry",
-      set: {
-        reservationExpiresAt: new Date(Date.now() + settings.pricing.priceLockMinutes * 60_000),
-      },
-    });
-  }
+  await ensureStockHeld(order);
 
   const merchantTransactionId = buildTransactionId(order.orderNumber);
   const amountPaise = order.totals.grandTotalPaise;
@@ -250,15 +230,20 @@ export async function initiatePaymentSDK(
 
   await orders.attachPayment(order._id, payment._id);
 
-  const sdkOrder = await phonepe.createSdkOrder({
-    merchantOrderId: merchantTransactionId,
-    amountPaise,
-    // Unused by this flow — the SDK returns through the app, not a browser —
-    // but the shared input type carries it.
-    redirectUrl: `${env.STOREFRONT_URL}/checkout/payment-return?ref=${merchantTransactionId}`,
-    message: `Diva order ${order.orderNumber}`,
-    metaInfo: { udf1: order.orderNumber },
-  });
+  const sdkOrder = await phonepe
+    .createSdkOrder({
+      merchantOrderId: merchantTransactionId,
+      amountPaise,
+      // Unused by this flow — the SDK returns through the app, not a browser —
+      // but the shared input type carries it.
+      redirectUrl: `${env.STOREFRONT_URL}/checkout/payment-return?ref=${merchantTransactionId}`,
+      message: `Diva order ${order.orderNumber}`,
+      metaInfo: { udf1: order.orderNumber },
+    })
+    .catch(async (error: unknown) => {
+      await releaseUnstartedPayment(order, merchantTransactionId, error);
+      throw error;
+    });
 
   // Only after the gateway accepts, for the reason given in `initiatePayment`.
   await orders.transition(order._id, "PAYMENT_INITIATED", ["PENDING", "PAYMENT_FAILED"], {
@@ -432,6 +417,72 @@ export async function reconcileStalePayments(options: { olderThanMinutes?: numbe
 }
 
 /**
+ * Releases stock held by checkouts that were never paid for. Run it on the
+ * same schedule as `reconcileStalePayments`.
+ *
+ * This is what returns stock when the customer backs out of PhonePe, closes
+ * the tab, or the app is killed mid-payment. None of those produce a FAILED
+ * callback straight away — the gateway reports the order PENDING until it
+ * expires — so without this sweep the units stay out of stock indefinitely.
+ *
+ * An order with a payment still in flight is asked about at the gateway
+ * first. If PhonePe says it is paid, or still pending, the hold stays: freeing
+ * a ring the customer is in the middle of paying for sells it twice.
+ */
+export async function releaseExpiredReservations() {
+  const expired = await orders.findExpiredReservations();
+  const results = { checked: 0, released: 0, deferred: 0, failed: 0 };
+
+  for (const order of expired) {
+    results.checked += 1;
+
+    try {
+      const payment = await payments.findLatestForOrder(order._id);
+
+      if (
+        payment?.method === "PHONEPE" &&
+        (payment.status === "INITIATED" || payment.status === "PENDING")
+      ) {
+        const status = await phonepe.fetchOrderStatus(payment.merchantTransactionId);
+
+        await payments.appendCallback(payment.merchantTransactionId, {
+          source: "CHECK_STATUS",
+          payload: status.raw,
+        });
+
+        // A FAILED outcome releases the stock in there, and clears
+        // `reservationExpiresAt` so the transition below then matches nothing.
+        await settleFromGateway(payment.merchantTransactionId, status);
+
+        if (status.status !== "FAILED") {
+          results.deferred += 1;
+          continue;
+        }
+      }
+
+      const abandoned = await orders.transition(
+        order._id,
+        "ABANDONED",
+        ["PENDING", "PAYMENT_INITIATED", "PAYMENT_FAILED"],
+        {
+          note: "Payment not completed in time — held stock released",
+          set: { reservationExpiresAt: null },
+          where: { reservationExpiresAt: { $ne: null } },
+        },
+      );
+
+      if (abandoned) await orderService.releaseHeldStock(order);
+      results.released += 1;
+    } catch (error) {
+      results.failed += 1;
+      console.error(`[payment] Failed to release expired hold on ${order.orderNumber}`, error);
+    }
+  }
+
+  return results;
+}
+
+/**
  * Applies a gateway outcome to the payment and its order. Idempotent.
  *
  * Every mutation below is guarded by the state it expects, so a second
@@ -481,9 +532,10 @@ async function settleFromGateway(
   if (!order) return settled;
 
   if (status.status === "FAILED") {
-    await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_INITIATED", {
+    const failed = await orders.transition(order._id, "PAYMENT_FAILED", "PAYMENT_INITIATED", {
       note: status.errorMessage ?? "Payment failed at the gateway",
       set: { reservationExpiresAt: null },
+      where: { reservationExpiresAt: { $ne: null } },
     });
 
     /**
@@ -493,8 +545,13 @@ async function settleFromGateway(
      * other customers of stock they could actually buy and leaves this order
      * looking "placed" when nothing was paid for. `initiatePayment` re-reserves
      * it if the customer retries from this same order.
+     *
+     * Only when the transition matched: an order that was not holding stock
+     * (or that another writer already moved) must not have units put back a
+     * second time, which would inflate inventory past what is on the shelf.
+     * An order stuck elsewhere keeps its hold for `releaseExpiredReservations`.
      */
-    await orderService.releaseHeldStock(order);
+    if (failed) await orderService.releaseHeldStock(order);
 
     void notify({
       userId: String(order.userId),
@@ -644,6 +701,78 @@ export async function refundOrder(input: {
 function buildTransactionId(orderNumber: string): string {
   const suffix = randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase();
   return `${orderNumber}-${suffix}`.slice(0, 63);
+}
+
+/**
+ * Makes sure this order is holding its stock before the customer is sent to
+ * the gateway.
+ *
+ * The rule throughout: an unpaid order holds stock **if and only if**
+ * `reservationExpiresAt` is set. A failed payment, or a gateway that refused
+ * to start one, releases the hold and clears the field; a retry from the same
+ * order takes the hold out again here. If someone else bought the last unit in
+ * between, this fails loudly rather than letting the customer pay for
+ * something that is no longer theirs to get.
+ *
+ * The write that records the new hold is filtered on the field still being
+ * null, so of two concurrent retries only one keeps its units; the other puts
+ * them straight back.
+ */
+async function ensureStockHeld(order: OrderDocument): Promise<void> {
+  if (order.reservationExpiresAt) return;
+
+  const settings = await getStoreSettings();
+  await reReserveOrderStock(order);
+
+  const held = await orders.transition(order._id, order.status, order.status, {
+    note: "Stock re-held for payment retry",
+    set: {
+      reservationExpiresAt: new Date(Date.now() + settings.pricing.priceLockMinutes * 60_000),
+    },
+    where: { reservationExpiresAt: null },
+  });
+
+  if (!held) {
+    await orderService.releaseHeldStock(order);
+    throw ApiError.conflict("This order changed while payment was starting. Please reload.");
+  }
+}
+
+/**
+ * Undoes the hold when PhonePe never accepted the payment request — an API
+ * error, a timeout, missing credentials.
+ *
+ * The customer was never given a payment page, so nothing can be paid against
+ * this attempt. Leaving the hold in place would keep the units out of stock
+ * until the sweep, and a customer who simply presses "Place order" again
+ * starts a *new* order that holds them a second time.
+ */
+async function releaseUnstartedPayment(
+  order: OrderDocument,
+  merchantTransactionId: string,
+  error: unknown,
+): Promise<void> {
+  try {
+    await payments.settle(merchantTransactionId, {
+      status: "FAILED",
+      failureMessage: error instanceof Error ? error.message : "Payment could not be started",
+    });
+
+    const released = await orders.transition(order._id, order.status, order.status, {
+      note: "Payment could not be started — held stock released",
+      set: { reservationExpiresAt: null },
+      where: { reservationExpiresAt: { $ne: null } },
+    });
+
+    if (released) await orderService.releaseHeldStock(order);
+  } catch (releaseError) {
+    // The gateway's error is the one the customer needs to see. The hold, if
+    // it is still in place, is picked up by `releaseExpiredReservations`.
+    console.error(
+      `[payment] Failed to release stock after initiation failure on ${order.orderNumber}`,
+      releaseError,
+    );
+  }
 }
 
 /**

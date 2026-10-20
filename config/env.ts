@@ -156,6 +156,12 @@ const envSchema = z.object({
   PHONEPE_SALT_KEY: z.string().optional(),
   SALT_ID: z.string().optional(),
 
+  /**
+   * Bearer secret Vercel Cron sends to `GET /payments/reconcile`. Unset, that
+   * entry point refuses every call and only the staff-authenticated POST works.
+   */
+  CRON_SECRET: z.string().min(16).optional(),
+
   // --- Shipping: Shiprocket ----------------------------------------------
   SHIPROCKET_EMAIL: z.string().optional(),
   SHIPROCKET_PASSWORD: z.string().optional(),
