@@ -1,7 +1,12 @@
 import mongoose, { type Model, type Types } from "mongoose";
 import { defineModel, baseSchemaOptions, imageSchema } from "@/models/base";
 import type { ImageRef } from "@/models/base";
-import { MODERATION_STATUSES, type ModerationStatus } from "@/models/enums";
+import {
+  MODERATION_STATUSES,
+  REVIEW_REPORT_REASONS,
+  type ModerationStatus,
+  type ReviewReportReason,
+} from "@/models/enums";
 
 /**
  * Product reviews.
@@ -15,6 +20,13 @@ import { MODERATION_STATUSES, type ModerationStatus } from "@/models/enums";
  * moderation is opt-out (staff can still reject one after the fact via
  * `PATCH /admin/reviews/:id`) rather than opt-in.
  */
+
+export interface ReviewReport {
+  userId: Types.ObjectId;
+  reason: ReviewReportReason;
+  details?: string;
+  createdAt: Date;
+}
 
 export interface ReviewDocument {
   _id: Types.ObjectId;
@@ -44,6 +56,15 @@ export interface ReviewDocument {
   helpfulCount: number;
   /** Prevents one account inflating a review's helpful count repeatedly. */
   helpfulUserIds: Types.ObjectId[];
+
+  /**
+   * Customer reports ("this review is offensive / spam"). One per account.
+   * `reportCount` counts reports not yet dealt with: a moderation decision
+   * resets it to 0, while `reports` keeps the history.
+   */
+  reports: ReviewReport[];
+  reportCount: number;
+  lastReportedAt?: Date;
 
   /** Seller reply, shown inline beneath the review. */
   reply?: {
@@ -88,6 +109,24 @@ const reviewSchema = new mongoose.Schema<ReviewDocument>(
       select: false,
     },
 
+    reports: {
+      type: [
+        new mongoose.Schema(
+          {
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+            reason: { type: String, enum: REVIEW_REPORT_REASONS, required: true },
+            details: { type: String, trim: true, maxlength: 500 },
+            createdAt: { type: Date, default: () => new Date() },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+      select: false,
+    },
+    reportCount: { type: Number, default: 0, min: 0 },
+    lastReportedAt: { type: Date },
+
     reply: {
       type: new mongoose.Schema(
         {
@@ -114,5 +153,8 @@ reviewSchema.index({ status: 1, createdAt: 1 });
 
 /** The homepage testimonials: featured and approved, newest first. */
 reviewSchema.index({ isFeatured: 1, status: 1, createdAt: -1 });
+
+/** The admin's "Reported" filter: open reports, most recent first. */
+reviewSchema.index({ reportCount: 1, lastReportedAt: -1 });
 
 export const ReviewModel: Model<ReviewDocument> = defineModel("Review", reviewSchema);

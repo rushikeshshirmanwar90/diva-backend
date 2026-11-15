@@ -32,6 +32,8 @@ export interface UserDocument {
   emailVerifiedAt?: Date;
   phoneVerifiedAt?: Date;
   googleId?: string;
+  /** Customers whose reviews this customer has blocked (hidden from them). */
+  blockedUserIds: Types.ObjectId[];
   avatarUrl?: string;
   isActive: boolean;
   lastLoginAt?: Date;
@@ -87,6 +89,12 @@ const userSchema = new mongoose.Schema<UserDocument>(
 
     /** Same as `phone`: the unique+sparse index is declared once, below. */
     googleId: { type: String, select: false },
+
+    blockedUserIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+      select: false,
+    },
 
     avatarUrl: { type: String, trim: true },
 

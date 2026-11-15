@@ -18,6 +18,7 @@ import {
   refreshSchema,
   updateProfileSchema,
 } from "@/validators/auth";
+import { reportReviewSchema } from "@/validators/review";
 import {
   createProductSchema,
   updateProductSchema,
@@ -250,6 +251,27 @@ registry.registerPath({
   summary: "Permanently delete the signed-in customer's account",
   security: [{ bearerAuth: [] }, { cookieAuth: [] }],
   responses: { ...okResponse("Account deleted"), ...errorResponses },
+});
+
+// Reviews: customer moderation tools (App Store guideline 1.2)
+registry.registerPath({
+  method: "post",
+  path: "/reviews/{id}/report",
+  tags: ["Reviews"],
+  summary: "Report a review to staff; it is hidden from the reporter straight away",
+  security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+  request: { params: z.object({ id: z.string() }), ...jsonBody(reportReviewSchema) },
+  responses: { ...okResponse("Report recorded"), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/reviews/{id}/block-author",
+  tags: ["Reviews"],
+  summary: "Hide every review by this review's author from the signed-in customer",
+  security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+  request: { params: z.object({ id: z.string() }) },
+  responses: { ...okResponse("Author blocked"), ...errorResponses },
 });
 
 // Catalogue

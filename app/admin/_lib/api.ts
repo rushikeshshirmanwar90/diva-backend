@@ -553,6 +553,10 @@ export type AdminReview = {
   status: ReviewStatus;
   rejectionReason?: string;
   helpfulCount: number;
+  /** Open customer reports; reset to 0 by a moderation decision. */
+  reportCount?: number;
+  reports?: { reason: string; details?: string; createdAt: string }[];
+  lastReportedAt?: string;
   createdAt: string;
 };
 

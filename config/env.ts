@@ -103,6 +103,14 @@ const envSchema = z.object({
    */
   GOOGLE_MOBILE_CLIENT_IDS: z.string().optional(),
 
+  // --- Review reports -----------------------------------------------------
+  /**
+   * Who gets emailed when a customer reports a review. Falls back to
+   * `ADMIN_LOGIN_EMAIL`, then `SEED_ADMIN_EMAIL`. Unset everywhere, reports
+   * still land in the admin's "Reported" filter; only the email is skipped.
+   */
+  REVIEW_REPORTS_EMAIL: z.string().optional(),
+
   // --- Cloudinary ---------------------------------------------------------
   /**
    * The admin UI uploads **unsigned**, using a preset, so these two are the
@@ -304,6 +312,11 @@ export function googleAuthConfig() {
 
   /** Every `aud` a token may legitimately carry: the web client plus each app client. */
   return { clientId: GOOGLE_CLIENT_ID, audiences: [GOOGLE_CLIENT_ID, ...mobile] };
+}
+
+/** Where review-report emails go, or null when no address is configured. */
+export function reviewReportsEmail(): string | null {
+  return env.REVIEW_REPORTS_EMAIL || env.ADMIN_LOGIN_EMAIL || env.SEED_ADMIN_EMAIL || null;
 }
 
 export function shiprocketConfig() {

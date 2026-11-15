@@ -58,3 +58,8 @@ export async function clearDefaultForUser(userId: string, exceptId?: string) {
 
   await AddressModel.updateMany(filter, { $set: { isDefault: false } });
 }
+
+/** Hard delete of every address — account erasure only. Orders keep their own snapshot. */
+export async function removeAllForUser(userId: string): Promise<void> {
+  await AddressModel.deleteMany({ userId });
+}

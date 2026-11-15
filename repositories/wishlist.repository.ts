@@ -47,3 +47,8 @@ export async function addItem(
 export async function removeItem(userId: string, productId: string): Promise<void> {
   await WishlistModel.updateOne({ userId }, { $pull: { items: { productId } } });
 }
+
+/** Account erasure. */
+export async function removeForUser(userId: string): Promise<void> {
+  await WishlistModel.deleteMany({ userId });
+}

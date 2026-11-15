@@ -105,6 +105,10 @@ export type CouponType = (typeof COUPON_TYPES)[number];
 export const MODERATION_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type ModerationStatus = (typeof MODERATION_STATUSES)[number];
 
+/** Why a customer reported a review (`POST /reviews/:id/report`). */
+export const REVIEW_REPORT_REASONS = ["OFFENSIVE", "SPAM", "IRRELEVANT", "PERSONAL_INFO", "OTHER"] as const;
+export type ReviewReportReason = (typeof REVIEW_REPORT_REASONS)[number];
+
 export const CONTENT_STATUSES = ["DRAFT", "PUBLISHED", "ARCHIVED"] as const;
 export type ContentStatus = (typeof CONTENT_STATUSES)[number];
 

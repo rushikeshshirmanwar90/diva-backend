@@ -23,6 +23,12 @@ import { otpEmail, welcomeEmail, passwordResetEmail, accountDeletionEmail } from
 import { env, googleAuthConfig } from "@/config/env";
 import { OAuth2Client } from "google-auth-library";
 import type { RegisterInput, LoginInput, GoogleLoginInput } from "@/validators/auth";
+import * as addresses from "@/repositories/address.repository";
+import * as wishlists from "@/repositories/wishlist.repository";
+import * as notifications from "@/repositories/notification.repository";
+import * as reviewService from "@/services/review.service";
+import { CartModel } from "@/models/Cart";
+import { ProductViewModel } from "@/models/ProductView";
 import type { Role } from "@/models/enums";
 
 /**
@@ -570,8 +576,7 @@ export async function deleteAccount(userId: string) {
     );
   }
 
-  await users.softDelete(userId);
-  await refreshTokens.revokeAllForUser(userId, "LOGOUT");
+  await eraseAccount(userId);
 
   return { deleted: true };
 }
@@ -609,8 +614,31 @@ export async function confirmAccountDeletion(token: string) {
     throw ApiError.badRequest("This deletion link is invalid or has expired.");
   }
 
-  await users.softDelete(String(user._id));
-  await refreshTokens.revokeAllForUser(String(user._id), "LOGOUT");
+  await eraseAccount(String(user._id));
 
   return { deleted: true };
+}
+
+/**
+ * What "delete my account" actually does, for both the in-app button and the
+ * emailed-link flow.
+ *
+ * Removed: name, email, phone, password, Google link, saved addresses,
+ * wishlist, cart, reviews (product ratings are recomputed), notifications,
+ * and the link between browsing history and the person.
+ *
+ * Kept: orders, with the delivery address copied onto each at purchase time,
+ * because Indian GST law requires invoice records. They no longer link to a
+ * named account.
+ */
+async function eraseAccount(userId: string) {
+  await reviewService.removeAllForUser(userId);
+  await addresses.removeAllForUser(userId);
+  await wishlists.removeForUser(userId);
+  await notifications.removeAllForUser(userId);
+  await CartModel.deleteMany({ userId });
+  await ProductViewModel.updateMany({ userId }, { $unset: { userId: 1 } });
+
+  await users.eraseAndDelete(userId);
+  await refreshTokens.revokeAllForUser(userId, "LOGOUT");
 }

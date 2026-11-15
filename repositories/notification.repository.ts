@@ -32,3 +32,8 @@ export async function markAllRead(userId: string): Promise<void> {
 export async function create(input: Partial<NotificationDocument>) {
   return NotificationModel.create(input);
 }
+
+/** Account erasure. */
+export async function removeAllForUser(userId: string): Promise<void> {
+  await NotificationModel.deleteMany({ userId });
+}

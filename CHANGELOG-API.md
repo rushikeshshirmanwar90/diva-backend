@@ -17,6 +17,16 @@ field or a new enum member is not breaking.
 
 ## Unreleased
 
+### 2026-11-02 — App Store: review reporting/blocking, real account erasure
+
+Additive, except the behaviour change to account deletion noted below.
+
+- **Added** `POST /reviews/:id/report` (auth) — body `{ reason: OFFENSIVE | SPAM | IRRELEVANT | PERSONAL_INFO | OTHER, details? }`. One report per account (a repeat returns `alreadyReported: true`). `400` on your own review. Emails `REVIEW_REPORTS_EMAIL` (fallback `ADMIN_LOGIN_EMAIL`, `SEED_ADMIN_EMAIL`).
+- **Added** `POST /reviews/:id/block-author` (auth) — hides all of that author's reviews from the caller. `400` on your own review.
+- **Changed** `GET /products/:slug/reviews` now reads an optional session: a signed-in caller doesn't get reviews by authors they blocked or reviews they reported. Each item gains `isOwn: boolean` (always `false` when signed out).
+- **Added** `reported=true` filter on `GET /admin/reviews`; items carry `reportCount`, `lastReportedAt` and `reports[]`. Any moderation decision (`PATCH /admin/reviews/:id`) resets `reportCount` to 0; re-approving an approved review is how staff "keep" a reported one.
+- **Changed (behaviour)** `DELETE /auth/delete-account` and `POST /auth/confirm-account-deletion` now erase personal data instead of only deactivating: the user row's name/email/phone/password/Google link are wiped (email becomes `deleted-<id>@deleted.invalid`, so the real address can register again); addresses, wishlist, cart, reviews and notifications are deleted; product views are unlinked. Orders are kept for tax records. Admin "suspend customer" is unchanged.
+
 ### 2026-09-24 — Public account-deletion request flow
 
 Additive.
