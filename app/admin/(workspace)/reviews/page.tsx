@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BadgeCheck, Check, Star, StarOff, X } from "lucide-react";
+import { BadgeCheck, Check, Flag, Star, StarOff, X } from "lucide-react";
 import { useAsyncData } from "@/app/admin/_lib/use-async-data";
 import { api, AdminApiError, type AdminReview, type PaginationMeta } from "@/app/admin/_lib/api";
 import {
@@ -31,9 +31,10 @@ import { useToast } from "@/app/admin/_components/shell";
 
 const PAGE_SIZE = 20;
 
-type Filter = "featured" | "all" | "PENDING" | "APPROVED" | "REJECTED";
+type Filter = "reported" | "featured" | "all" | "PENDING" | "APPROVED" | "REJECTED";
 
 const FILTERS: { key: Filter; label: string }[] = [
+  { key: "reported", label: "Reported" },
   { key: "featured", label: "On the homepage" },
   { key: "all", label: "All reviews" },
   { key: "APPROVED", label: "Approved" },
@@ -47,7 +48,26 @@ const STATUS_BADGE: Record<AdminReview["status"], { label: string; tone: StatusT
   REJECTED: { label: "Rejected", tone: "low" },
 };
 
+const REPORT_REASONS: Record<string, string> = {
+  OFFENSIVE: "Offensive",
+  SPAM: "Spam",
+  IRRELEVANT: "Not about the product",
+  PERSONAL_INFO: "Personal info",
+  OTHER: "Other",
+};
+
+/** "Offensive ×2 · Spam" — the open reports since the last moderation decision. */
+function reportSummary(review: AdminReview): string {
+  const open = (review.reports ?? []).slice(-(review.reportCount ?? 0));
+  const counts = new Map<string, number>();
+  for (const report of open) counts.set(report.reason, (counts.get(report.reason) ?? 0) + 1);
+  return [...counts]
+    .map(([reason, n]) => `${REPORT_REASONS[reason] ?? reason}${n > 1 ? ` ×${n}` : ""}`)
+    .join(" · ");
+}
+
 function queryFor(filter: Filter): Record<string, unknown> {
+  if (filter === "reported") return { reported: true };
   if (filter === "featured") return { featured: true };
   if (filter === "all") return {};
   return { status: filter };
@@ -113,6 +133,14 @@ export default function ReviewsPage() {
       "Review approved",
     );
 
+  /** Re-approving an approved review clears its open reports. */
+  const keep = (review: AdminReview) =>
+    run(
+      review._id,
+      () => api.patch(`/admin/reviews/${review._id}`, { status: "APPROVED" }),
+      "Review kept, reports cleared",
+    );
+
   const reject = async () => {
     if (!rejecting) return;
     const { id, reason } = rejecting;
@@ -162,11 +190,19 @@ export default function ReviewsPage() {
           <TreeSkeleton label="Loading reviews…" />
         ) : loadError ? null : reviews.length === 0 ? (
           <EmptyRow
-            title={filter === "featured" ? "Nothing on the homepage yet" : "No reviews here"}
+            title={
+              filter === "featured"
+                ? "Nothing on the homepage yet"
+                : filter === "reported"
+                  ? "No reported reviews"
+                  : "No reviews here"
+            }
             description={
               filter === "featured"
                 ? "Open “Approved” and star the reviews you want customers to see first."
-                : "Reviews customers leave on product pages will show up here."
+                : filter === "reported"
+                  ? "When a customer reports a review in the app, it shows up here. Reject it or keep it within 24 hours."
+                  : "Reviews customers leave on product pages will show up here."
             }
           />
         ) : (
@@ -238,6 +274,12 @@ export default function ReviewsPage() {
                             ? ` · Rejected: ${review.rejectionReason}`
                             : ""}
                         </small>
+                        {(review.reportCount ?? 0) > 0 && (
+                          <small style={{ display: "block", marginTop: 4, color: "#b91c1c" }}>
+                            <Flag style={{ width: 12, height: 12, verticalAlign: "-2px" }} />{" "}
+                            {review.reportCount === 1 ? "1 report" : `${review.reportCount} reports`}: {reportSummary(review)}
+                          </small>
+                        )}
                       </div>
                     </div>
 
@@ -245,6 +287,17 @@ export default function ReviewsPage() {
                       {review.isFeatured && <StatusBadge label="Homepage" tone="shipped" />}
                       <StatusBadge label={badge.label} tone={badge.tone} />
                       <div className="tree-actions">
+                        {review.status === "APPROVED" && (review.reportCount ?? 0) > 0 && (
+                          <button
+                            className="row-action"
+                            onClick={() => void keep(review)}
+                            disabled={busy}
+                            aria-label="Keep review and clear reports"
+                            title="Keep review (clear reports)"
+                          >
+                            <Check />
+                          </button>
+                        )}
                         {review.status !== "APPROVED" && (
                           <button
                             className="row-action"

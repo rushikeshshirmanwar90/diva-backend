@@ -209,6 +209,59 @@ export async function list(options: {
   return { items, total };
 }
 
+/**
+ * Erases a customer's personal details and marks the account deleted — the
+ * customer-initiated "delete my account" path.
+ *
+ * The row stays, because orders point at it, but nothing on it identifies the
+ * person any more. The email is swapped for a unique placeholder, which also
+ * frees the real address to register again. Fields with a unique+sparse index
+ * (`phone`, `googleId`) are `$unset`, not nulled: a sparse index
+ * still indexes an explicit null, so two erased accounts would collide.
+ *
+ * Not `softDelete`: the admin's "suspend customer" reuses that and must not
+ * destroy data.
+ */
+export async function eraseAndDelete(id: string) {
+  await UserModel.updateOne(
+    { _id: id },
+    {
+      $set: {
+        name: "Deleted customer",
+        email: `deleted-${id}@deleted.invalid`,
+        marketingOptIn: false,
+        blockedUserIds: [],
+        deletedAt: new Date(),
+        isActive: false,
+      },
+      $unset: {
+        phone: 1,
+        passwordHash: 1,
+        googleId: 1,
+        avatarUrl: 1,
+        emailVerifiedAt: 1,
+        phoneVerifiedAt: 1,
+        otpHash: 1,
+        otpExpiresAt: 1,
+        passwordResetTokenHash: 1,
+        passwordResetExpiresAt: 1,
+        deletionTokenHash: 1,
+        deletionTokenExpiresAt: 1,
+      },
+      $inc: { tokenVersion: 1 },
+    },
+  );
+}
+
+export async function getBlockedUserIds(id: string): Promise<Types.ObjectId[]> {
+  const user = await UserModel.findById(id).select("+blockedUserIds").lean();
+  return user?.blockedUserIds ?? [];
+}
+
+export async function addBlockedUser(id: string, blockedId: string) {
+  await UserModel.updateOne({ _id: id }, { $addToSet: { blockedUserIds: blockedId } });
+}
+
 export async function softDelete(id: string) {
   await UserModel.updateOne(
     { _id: id },

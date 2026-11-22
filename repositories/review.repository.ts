@@ -33,11 +33,23 @@ export async function findByAuthor(productId: string, userId: string) {
  * corrects their profile is not left with the old spelling under every review
  * they have written.
  */
-export async function listApproved(productId: string, query: ListReviewsQuery) {
-  const match = {
+export async function listApproved(
+  productId: string,
+  query: ListReviewsQuery,
+  viewer?: { id: string; blockedUserIds: mongoose.Types.ObjectId[] },
+) {
+  const viewerId = viewer ? new mongoose.Types.ObjectId(viewer.id) : null;
+
+  // A signed-in viewer never sees reviews by people they blocked, or reviews
+  // they reported themselves.
+  const match: Record<string, unknown> = {
     productId: new mongoose.Types.ObjectId(productId),
     status: "APPROVED" as const,
   };
+  if (viewer && viewerId) {
+    if (viewer.blockedUserIds.length > 0) match.userId = { $nin: viewer.blockedUserIds };
+    match["reports.userId"] = { $ne: viewerId };
+  }
 
   const pipeline: PipelineStage[] = [
     { $match: match },
@@ -65,6 +77,9 @@ export async function listApproved(productId: string, query: ListReviewsQuery) {
         reply: 1,
         createdAt: 1,
         authorName: { $ifNull: [{ $first: "$author.name" }, "Diva customer"] },
+        // Lets the app hide "Report" / "Block" on the viewer's own review
+        // without exposing anyone's user id.
+        isOwn: viewerId ? { $eq: ["$userId", viewerId] } : { $literal: false },
       },
     },
   ];
@@ -103,21 +118,57 @@ export async function remove(id: string) {
   return ReviewModel.findByIdAndDelete(id).lean();
 }
 
+/**
+ * Account erasure: deletes every review this customer wrote and returns the
+ * products whose rating needs recomputing.
+ */
+export async function removeAllByAuthor(userId: string): Promise<string[]> {
+  const productIds = await ReviewModel.distinct("productId", { userId });
+  await ReviewModel.deleteMany({ userId });
+  return productIds.map(String);
+}
+
+/**
+ * Records one customer's report against a review. Returns null when this
+ * account already reported it — the filter only matches if they haven't, so a
+ * double tap can't count twice.
+ */
+export async function addReport(
+  id: string,
+  report: { userId: string; reason: string; details?: string },
+) {
+  const now = new Date();
+  return ReviewModel.findOneAndUpdate(
+    { _id: id, "reports.userId": { $ne: new mongoose.Types.ObjectId(report.userId) } },
+    {
+      $push: {
+        reports: { userId: report.userId, reason: report.reason, details: report.details, createdAt: now },
+      },
+      $inc: { reportCount: 1 },
+      $set: { lastReportedAt: now },
+    },
+    { returnDocument: "after" },
+  ).lean();
+}
+
 export async function listForAdmin(options: {
   page: number;
   limit: number;
   status?: string;
   productId?: string;
   featured?: boolean;
+  reported?: boolean;
 }) {
   const filter: Record<string, unknown> = {};
   if (options.status) filter.status = options.status;
   if (options.productId) filter.productId = options.productId;
   if (options.featured !== undefined) filter.isFeatured = options.featured;
+  if (options.reported) filter.reportCount = { $gt: 0 };
 
   const [items, total] = await Promise.all([
     ReviewModel.find(filter)
-      .sort({ createdAt: -1 })
+      .select("+reports")
+      .sort(options.reported ? { lastReportedAt: -1 } : { createdAt: -1 })
       .skip((options.page - 1) * options.limit)
       .limit(options.limit)
       .populate("userId", "name email")
@@ -158,6 +209,8 @@ export async function moderate(
         rejectionReason: update.rejectionReason ?? null,
         moderatedBy: update.moderatedBy,
         moderatedAt: new Date(),
+        // A decision answers every open report; the history stays in `reports`.
+        reportCount: 0,
       },
     },
     { returnDocument: "after" },

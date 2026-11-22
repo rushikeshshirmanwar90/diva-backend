@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { objectId, pagination, imageInput, booleanFlag } from "@/validators/common";
-import { MODERATION_STATUSES } from "@/models/enums";
+import { MODERATION_STATUSES, REVIEW_REPORT_REASONS } from "@/models/enums";
 
 /**
  * Review input.
@@ -44,6 +44,8 @@ export const listReviewsForAdminSchema = z
     productId: objectId.optional(),
     /** `true` narrows to the reviews currently picked for the homepage. */
     featured: booleanFlag.optional(),
+    /** `true` narrows to reviews with open customer reports. */
+    reported: booleanFlag.optional(),
   })
   .strict();
 
@@ -69,3 +71,13 @@ export const moderateReviewSchema = z
 export const replyToReviewSchema = z
   .object({ body: z.string().trim().min(1).max(2000) })
   .strict();
+
+/** `POST /reviews/:id/report` — a customer flags a review for staff to look at. */
+export const reportReviewSchema = z
+  .object({
+    reason: z.enum(REVIEW_REPORT_REASONS),
+    details: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+export type ReportReviewInput = z.infer<typeof reportReviewSchema>;

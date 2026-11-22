@@ -191,6 +191,37 @@ export function accountDeletionEmail(name: string, confirmUrl: string): MailBody
   };
 }
 
+const REPORT_REASON_LABELS: Record<string, string> = {
+  OFFENSIVE: "Offensive or abusive",
+  SPAM: "Spam or advertising",
+  IRRELEVANT: "Not about this product",
+  PERSONAL_INFO: "Shares personal information",
+  OTHER: "Other",
+};
+
+/** To staff: a customer reported a review. */
+export function reviewReportedEmail(input: {
+  productTitle: string;
+  reason: string;
+  details?: string;
+  reviewText: string;
+  reportCount: number;
+}): MailBody {
+  return {
+    subject: `Review reported on ${input.productTitle}`,
+    html: shell(`
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:normal">A customer reported a review</h2>
+      <p><b>Product:</b> ${esc(input.productTitle)}<br />
+      <b>Reason:</b> ${esc(REPORT_REASON_LABELS[input.reason] ?? input.reason)}<br />
+      <b>Open reports on this review:</b> ${input.reportCount}</p>
+      ${input.details ? `<p><b>Their note:</b> ${esc(input.details)}</p>` : ""}
+      <p style="color:${MUTED};border-left:2px solid ${GOLD};padding-left:12px">${esc(input.reviewText || "(rating only, no text)")}</p>
+      <p>Please review it within 24 hours: reject it if it breaks the rules, or keep it to clear the report.</p>
+      ${button("Open reported reviews", `${env.APP_URL}/admin/reviews`)}
+    `),
+  };
+}
+
 export function orderConfirmationEmail(input: {
   name: string;
   orderNumber: string;

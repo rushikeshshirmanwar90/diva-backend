@@ -1,10 +1,14 @@
 import { ApiError } from "@/lib/api/errors";
 import * as reviews from "@/repositories/review.repository";
 import * as products from "@/repositories/product.repository";
+import * as users from "@/repositories/user.repository";
 import { ProductModel } from "@/models/Product";
+import { reviewReportsEmail } from "@/config/env";
+import { queueMail, reviewReportedEmail } from "@/lib/send-mail";
 import type {
   CreateReviewInput,
   ListReviewsQuery,
+  ReportReviewInput,
 } from "@/validators/review";
 
 /**
@@ -22,11 +26,19 @@ import type {
  * after the fact) rather than a gate before publication.
  */
 
-export async function listForProduct(slug: string, query: ListReviewsQuery) {
+/**
+ * `viewerId` is the signed-in caller, if any: their blocked authors and the
+ * reviews they reported are left out of what they see.
+ */
+export async function listForProduct(slug: string, query: ListReviewsQuery, viewerId?: string) {
   const product = await products.findBySlug(slug, { publicOnly: true });
   if (!product) throw ApiError.notFound("We could not find that product.");
 
-  const { items, total } = await reviews.listApproved(String(product._id), query);
+  const viewer = viewerId
+    ? { id: viewerId, blockedUserIds: await users.getBlockedUserIds(viewerId) }
+    : undefined;
+
+  const { items, total } = await reviews.listApproved(String(product._id), query, viewer);
 
   return {
     items,
@@ -114,6 +126,7 @@ export async function listForAdmin(options: {
   status?: string;
   productId?: string;
   featured?: boolean;
+  reported?: boolean;
 }) {
   return reviews.listForAdmin(options);
 }
@@ -186,6 +199,64 @@ export async function deleteReview(id: string, userId: string) {
   }
 
   return { deleted: true };
+}
+
+/**
+ * A customer reports a review (App Store guideline 1.2). The review disappears
+ * for the reporter straight away (see `listApproved`) and lands in the admin's
+ * "Reported" filter; staff are emailed so they can act within 24 hours.
+ */
+export async function reportReview(id: string, userId: string, input: ReportReviewInput) {
+  const review = await reviews.findById(id);
+  if (!review) throw ApiError.notFound("We could not find that review.");
+
+  if (String(review.userId) === userId) {
+    throw ApiError.badRequest("You can't report your own review. You can delete it from My reviews.");
+  }
+
+  const updated = await reviews.addReport(id, { userId, reason: input.reason, details: input.details });
+  if (!updated) return { reported: true, alreadyReported: true };
+
+  const to = reviewReportsEmail();
+  if (to) {
+    const product = await products.findById(String(review.productId));
+    queueMail({
+      to,
+      ...reviewReportedEmail({
+        productTitle: product?.title ?? "a product",
+        reason: input.reason,
+        details: input.details,
+        reviewText: [review.title, review.body].filter(Boolean).join(" — "),
+        reportCount: updated.reportCount,
+      }),
+    });
+  }
+
+  return { reported: true, alreadyReported: false };
+}
+
+/**
+ * A customer blocks a review's author: none of that person's reviews are
+ * shown to them again. Takes the review id, so no user id is ever exposed.
+ */
+export async function blockReviewAuthor(id: string, userId: string) {
+  const review = await reviews.findById(id);
+  if (!review) throw ApiError.notFound("We could not find that review.");
+
+  if (String(review.userId) === userId) {
+    throw ApiError.badRequest("You can't block yourself.");
+  }
+
+  await users.addBlockedUser(userId, String(review.userId));
+  return { blocked: true };
+}
+
+/** Account erasure: removes every review this customer wrote and fixes ratings. */
+export async function removeAllForUser(userId: string) {
+  const productIds = await reviews.removeAllByAuthor(userId);
+  for (const productId of productIds) {
+    await refreshProductRating(productId);
+  }
 }
 
 // ---------------------------------------------------------------------------
