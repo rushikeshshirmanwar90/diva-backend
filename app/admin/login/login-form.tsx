@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Gem, Info, Loader2, LogIn } from "lucide-react";
+import { Eye, EyeOff, Gem, Info, Loader2, LogIn } from "lucide-react";
 import { api, AdminApiError } from "@/app/admin/_lib/api";
 
 /**
@@ -38,6 +38,7 @@ export function LoginForm() {
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -127,14 +128,37 @@ export function LoginForm() {
         <form onSubmit={submit} className="login-form">
           <label className="field">
             <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-              autoFocus
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+                autoFocus
+                style={{ width: "100%", paddingRight: "2.5rem" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                style={{
+                  position: "absolute",
+                  right: "0.75rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  color: "var(--muted, #888)",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </label>
 
           <button type="submit" className="primary-button login-submit" disabled={submitting}>
