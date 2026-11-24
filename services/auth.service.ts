@@ -22,7 +22,8 @@ import { queueMail, sendMailNow } from "@/lib/send-mail";
 import { otpEmail, welcomeEmail, passwordResetEmail, accountDeletionEmail } from "@/lib/send-mail";
 import { env, googleAuthConfig } from "@/config/env";
 import { OAuth2Client } from "google-auth-library";
-import type { RegisterInput, LoginInput, GoogleLoginInput } from "@/validators/auth";
+import * as jose from "jose";
+import type { RegisterInput, LoginInput, GoogleLoginInput, AppleLoginInput } from "@/validators/auth";
 import * as addresses from "@/repositories/address.repository";
 import * as wishlists from "@/repositories/wishlist.repository";
 import * as notifications from "@/repositories/notification.repository";
@@ -351,6 +352,67 @@ export async function loginWithGoogle(
 // ---------------------------------------------------------------------------
 // Session issuance and refresh
 // ---------------------------------------------------------------------------
+
+/**
+ * Signs in (or silently registers) with an Apple identity token.
+ *
+ * Apple's identity token is a JWT signed with an EC key from
+ * https://appleid.apple.com/auth/keys. We verify the signature and `aud`
+ * (must be our bundle ID) before trusting any claim inside it.
+ *
+ * Email is only present on the *first* sign-in. Subsequent ones send null, so
+ * we store Apple's `sub` as `appleId` to find the account on those calls.
+ */
+export async function loginWithApple(
+  input: AppleLoginInput,
+  context: RequestContext,
+): Promise<AuthResult> {
+  let payload: jose.JWTPayload & { email?: string };
+  try {
+    const JWKS = jose.createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
+    const { payload: verified } = await jose.jwtVerify(input.identityToken, JWKS, {
+      issuer: "https://appleid.apple.com",
+      audience: "com.diva.jewel",
+    });
+    payload = verified as typeof payload;
+  } catch {
+    throw ApiError.unauthenticated("Your Apple sign-in could not be verified.");
+  }
+
+  const appleId = payload.sub;
+  if (!appleId) throw ApiError.unauthenticated("Your Apple sign-in could not be verified.");
+
+  let user = await users.findByAppleId(appleId);
+
+  if (!user) {
+    const email = payload.email;
+    if (email) {
+      const existing = await users.findByEmail(email);
+      if (existing) {
+        user = await users.linkAppleId(String(existing._id), appleId);
+      } else {
+        const name = input.name?.trim() || email.split("@")[0]!;
+        user = await users.create({
+          name,
+          email,
+          appleId,
+          role: "customer",
+          emailVerifiedAt: new Date(),
+        });
+      }
+    } else {
+      throw ApiError.unauthenticated("Your Apple sign-in could not be verified.");
+    }
+  }
+
+  if (!user) throw ApiError.unauthenticated("Your Apple sign-in could not be verified.");
+  if (!user.isActive || user.deletedAt) {
+    throw ApiError.forbidden("This account has been suspended. Contact support.");
+  }
+
+  await users.recordLogin(String(user._id));
+  return issueSession(user, context, input.audience);
+}
 
 async function issueSession(
   user: {

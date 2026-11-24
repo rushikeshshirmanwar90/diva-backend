@@ -76,6 +76,17 @@ export const googleLoginSchema = z
 
 export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 
+export const appleLoginSchema = z
+  .object({
+    identityToken: z.string().min(20, "Invalid Apple credential"),
+    /** Name is only provided on the very first sign-in; nullable on subsequent ones. */
+    name: z.string().trim().max(80).optional(),
+    audience: z.enum(["storefront", "admin"]).default("storefront"),
+  })
+  .strict();
+
+export type AppleLoginInput = z.infer<typeof appleLoginSchema>;
+
 export const verifyOtpSchema = z
   .object({
     email,

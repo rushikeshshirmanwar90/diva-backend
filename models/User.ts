@@ -18,8 +18,7 @@ export interface UserDocument {
   phone?: string;
   /** Absent for Google-only accounts, which have no password to check. */
   passwordHash?: string;
-  role: Role;
-  /**
+  role: Role;  /**
    * Bumped to invalidate every outstanding access token for this user at once.
    *
    * Access tokens are stateless and live up to 15 minutes, so there is no
@@ -32,6 +31,7 @@ export interface UserDocument {
   emailVerifiedAt?: Date;
   phoneVerifiedAt?: Date;
   googleId?: string;
+  appleId?: string;
   /** Customers whose reviews this customer has blocked (hidden from them). */
   blockedUserIds: Types.ObjectId[];
   avatarUrl?: string;
@@ -90,6 +90,8 @@ const userSchema = new mongoose.Schema<UserDocument>(
     /** Same as `phone`: the unique+sparse index is declared once, below. */
     googleId: { type: String, select: false },
 
+    appleId: { type: String, select: false },
+
     blockedUserIds: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       default: [],
@@ -132,6 +134,7 @@ const userSchema = new mongoose.Schema<UserDocument>(
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ phone: 1 }, { unique: true, sparse: true });
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+userSchema.index({ appleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ createdAt: -1 });
 
 /** Admin user search. */

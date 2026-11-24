@@ -59,6 +59,18 @@ export async function findByGoogleId(googleId: string) {
   return UserModel.findOne({ googleId, ...notDeleted }).lean();
 }
 
+export async function findByAppleId(appleId: string) {
+  return UserModel.findOne({ appleId, ...notDeleted }).lean();
+}
+
+export async function linkAppleId(id: string, appleId: string) {
+  return UserModel.findByIdAndUpdate(
+    id,
+    { $set: { appleId } },
+    { returnDocument: "after" },
+  ).lean();
+}
+
 /**
  * Attaches a Google identity to an account that registered with a password.
  *
@@ -82,6 +94,7 @@ export async function create(input: {
   role?: Role;
   marketingOptIn?: boolean;
   googleId?: string;
+  appleId?: string;
   avatarUrl?: string;
   emailVerifiedAt?: Date;
   otpHash?: string;
